@@ -22,16 +22,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.util.Calendar
-import java.util.TimeZone
 
 
 @Serializable
 data class Todo(
     val title: String,
     val note: String? = null,
-    val target_date: String? = null,
+    @SerialName("target_date")
+    val targetDate: String? = null,
     val created: String? = null,
 )
 
