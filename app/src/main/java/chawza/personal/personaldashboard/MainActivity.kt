@@ -10,37 +10,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
+import chawza.personal.personaldashboard.view.TodoListPreview
+import chawza.personal.personaldashboard.view.TodoListView
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+            val todoListViewModel = TodoListVIewModel()
             PersonalDashboardTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    Greeting("Android")
-                }
+                TodoListView(todoListViewModel)
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    PersonalDashboardTheme {
-        Greeting("Android")
     }
 }
