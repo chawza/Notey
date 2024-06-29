@@ -13,9 +13,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -24,6 +28,7 @@ import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.io.IOException
 
 
 @Serializable
@@ -51,15 +56,29 @@ fun TodoListView(
     modifier: Modifier = Modifier,
 ) {
     val todos = viewModel.todos.collectAsState()
+    val snackBar = remember { SnackbarHostState() }
+
+    LaunchedEffect(true) {
+        try {
+            viewModel.fetchAll()
+        } catch (e: IOException){
+            snackBar.showSnackbar("Unable to fetch todos")
+        }
+    }
 
     Scaffold(
         modifier = modifier,
         floatingActionButton = { AddButton(onCLick = {}) },
         topBar = {
             Text(text = "My Todos", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackBar)
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues).fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier
+            .padding(paddingValues)
+            .fillMaxSize(), contentAlignment = Alignment.Center) {
             LazyColumn {
                 items(todos.value) { todo ->
                     ListItem(

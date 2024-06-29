@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import chawza.personal.personaldashboard.core.API
 import chawza.personal.personaldashboard.view.Todo
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,8 +52,5 @@ class TodoListVIewModel: ViewModel() {
         }
 
         response.close()
-    }
-    init {
-        viewModelScope.run { CoroutineScope(Dispatchers.IO).launch{ fetchAll() } }
     }
 }
