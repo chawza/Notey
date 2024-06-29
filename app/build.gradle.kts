@@ -41,9 +41,6 @@ android {
     buildFeatures {
         compose = true
     }
-//    composeOptions {
-//        kotlinCompilerExtensionVersion = "2.0.0"
-//    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -63,6 +60,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.okhttp)
     implementation(libs.jetbrains.kotlinx.serialization.json)
+    implementation(libs.androidx.datastore.preferences)
 
 
     testImplementation(libs.junit)
