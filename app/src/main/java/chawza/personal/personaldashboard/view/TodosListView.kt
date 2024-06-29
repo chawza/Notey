@@ -22,8 +22,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
+import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.serialization.SerialName
@@ -55,14 +58,18 @@ fun TodoListView(
     viewModel: TodoListVIewModel,
     modifier: Modifier = Modifier,
 ) {
+    val ctx = LocalContext.current
     val todos = viewModel.todos.collectAsState()
     val snackBar = remember { SnackbarHostState() }
 
     LaunchedEffect(true) {
-        try {
-            viewModel.fetchAll()
-        } catch (e: IOException){
-            snackBar.showSnackbar("Unable to fetch todos")
+        ctx.userStore.data.collect {
+            val token = it[USER_TOKEN_KEY]!!
+            try {
+                viewModel.fetchAll(token)
+            } catch (e: IOException) {
+                snackBar.showSnackbar("Unable to fetch todos")
+            }
         }
     }
 

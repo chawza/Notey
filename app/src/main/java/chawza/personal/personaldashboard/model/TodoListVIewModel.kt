@@ -23,7 +23,7 @@ class TodoListVIewModel: ViewModel() {
         _todos.update { todos }
     }
 
-    suspend fun fetchAll() {
+    suspend fun fetchAll(token: String) {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.GET_TODO_LIST)
@@ -31,7 +31,7 @@ class TodoListVIewModel: ViewModel() {
 
         val request = Request.Builder()
             .url(url)
-            .addHeader("Authorization", "Token ${API.TOKEN}")
+            .addHeader("Authorization", "Token $token")
             .get()
             .build()
 
