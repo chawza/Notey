@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import chawza.personal.personaldashboard.core.API
@@ -79,7 +81,8 @@ class LoginActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxWidth(),
                                 value = password.value,
                                 onValueChange = {value -> password.value = value},
-                                label = { Text(text = "Password")}
+                                label = { Text(text = "Password")},
+                                keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password),
                             )
                             Button(
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -90,9 +93,14 @@ class LoginActivity : ComponentActivity() {
                                         isLoggingIn.value = false
                                     }
                                 },
-                                shape = MaterialTheme.shapes.small
+                                shape = MaterialTheme.shapes.small,
+                                enabled = !isLoggingIn.value
                             ) {
-                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(text = "Login")
                                     if (isLoggingIn.value) {
                                         CircularProgressIndicator(color = Color.White)
@@ -152,14 +160,12 @@ class LoginActivity : ComponentActivity() {
         val resJson = JSONObject(response.body!!.string())
 
         if (!resJson.has("token")) {
-            // Login Error
             snackBar.showSnackbar("Something went wrong")
             return@withContext
         }
 
         val token = resJson.getString("token")
-        val ctx = this@LoginActivity
-        ctx.userStore.edit {
+        this@LoginActivity.userStore.edit {
             it[USER_TOKEN_KEY] = token
         }
         goToHome()

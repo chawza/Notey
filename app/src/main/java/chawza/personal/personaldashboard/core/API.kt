@@ -8,7 +8,7 @@ object API {
     val SCHEMA = "http"
 
     val GET_TOKEN = "api/auth/get-token"
-    val GET_TODO_LIST = "api/todos/"
+    val TODO_LIST_VIEWSET = "api/todos/"
 
     val TOKEN = "45dccb135d6583657922bfdf8bb06dda11133bc0"
 

@@ -1,34 +1,56 @@
 package chawza.personal.personaldashboard.view
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.IOException
@@ -52,6 +74,81 @@ fun AddButton(onCLick: () -> Unit) {
     }
 }
 
+@Composable
+fun AddTodoModal(
+    modifier: Modifier = Modifier,
+    dismiss: () -> Unit,
+    onAddNewTodo: suspend (Todo) -> Boolean
+) {
+    Dialog(onDismissRequest = dismiss) {
+        var title by remember { mutableStateOf("") }
+        var note by remember { mutableStateOf("") }
+        var targetDate by remember { mutableStateOf("") }
+
+        var isLoading by remember { mutableStateOf(false) }
+
+        Surface(
+            modifier = modifier
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Text(text = "New Task", style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = title,
+                    singleLine = true,
+                    onValueChange = { title = it },
+                    label = { Text(text = "Title")}
+                    )
+                OutlinedTextField(
+                    modifier = Modifier
+                        .height(56.dp * 4)
+                        .fillMaxWidth(),
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text(text = "Note")}
+                )
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    onClick = {
+                        val newTodo = Todo(title = title, note = note.ifEmpty { null })
+                        isLoading = true
+
+                        CoroutineScope(Dispatchers.Default).launch {
+                            try {
+                                if (onAddNewTodo(newTodo)) {
+                                    withContext(Dispatchers.Main) {
+                                        dismiss()
+                                    }
+                                }
+                            }
+                            finally {
+                                withContext(Dispatchers.Main) {
+                                    isLoading = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isLoading,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(text = "Create")
+                    Divider(modifier.width(20.dp))
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White)
+                    }
+                }
+            }
+
+        }
+
+    }
+}
 
 @Composable
 fun TodoListView(
@@ -61,13 +158,18 @@ fun TodoListView(
     val ctx = LocalContext.current
     val todos = viewModel.todos.collectAsState()
     val snackBar = remember { SnackbarHostState() }
+    val showAddTodoModal = remember { mutableStateOf(false) }
+    val userToken = remember {
+        runBlocking {
+            ctx.userStore.data.first()[USER_TOKEN_KEY]!!
+        }
+    }
 
     LaunchedEffect(true) {
-        ctx.userStore.data.collect {
-            val token = it[USER_TOKEN_KEY]!!
-            try {
-                viewModel.fetchAll(token)
-            } catch (e: IOException) {
+        try {
+            viewModel.fetchAll(userToken)
+        } catch (e: IOException) {
+            withContext(Dispatchers.Main) {
                 snackBar.showSnackbar("Unable to fetch todos")
             }
         }
@@ -75,9 +177,15 @@ fun TodoListView(
 
     Scaffold(
         modifier = modifier,
-        floatingActionButton = { AddButton(onCLick = {}) },
+        floatingActionButton = {
+            AddButton(onCLick = {
+                showAddTodoModal.value = true
+            })
+        },
         topBar = {
-            Text(text = "My Todos", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+            Row {
+                Text(text = "My Todos", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+            }
         },
         snackbarHost = {
             SnackbarHost(hostState = snackBar)
@@ -99,6 +207,21 @@ fun TodoListView(
                 Text(text = "No Todos") 
             }
         }
+    }
+
+    if (showAddTodoModal.value) {
+        AddTodoModal(
+            dismiss = { showAddTodoModal.value = false},
+            onAddNewTodo = { todo ->
+                withContext(Dispatchers.Default) {
+                    val success = viewModel.addTodo(todo, userToken)
+                    if (success) {
+                        viewModel.fetchAll(userToken)
+                    }
+                    return@withContext success
+                }
+            }
+        )
     }
 }
 
