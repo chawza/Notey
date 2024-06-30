@@ -45,10 +45,10 @@ import androidx.compose.ui.window.Dialog
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
+import chawza.personal.personaldashboard.repository.TodoService
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -167,10 +167,14 @@ fun TodoListView(
 
     LaunchedEffect(true) {
         try {
-            viewModel.fetchAll(userToken)
+            viewModel.syncTodos(userToken)
         } catch (e: IOException) {
             withContext(Dispatchers.Main) {
-                snackBar.showSnackbar("Unable to fetch todos")
+                snackBar.showSnackbar("Unable connected to Server")
+            }
+        } catch (e: Error) {
+            e.message?.let {
+                snackBar.showSnackbar(it)
             }
         }
     }
@@ -211,9 +215,17 @@ fun TodoListView(
                                 tint = Color.Red,
                                 modifier = Modifier.clickable { 
                                     CoroutineScope(Dispatchers.Default).launch {
-                                        val success = viewModel.deleteTodo(todo, userToken)
-                                        if (success) {
-                                            viewModel.fetchAll(userToken)
+                                        val todoService = TodoService(userToken)
+
+                                        val response = try {
+                                            todoService.deleteTodo(todo)
+                                        } catch (e: IOException) {
+                                            snackBar.showSnackbar("Unable to connect to Server")
+                                            return@launch
+                                        }
+
+                                        if (response.isSuccessful) {
+                                            viewModel.syncTodos(userToken)
                                         } else {
                                             snackBar.showSnackbar("Delete Failed")
                                         }
@@ -235,11 +247,25 @@ fun TodoListView(
             dismiss = { showAddTodoModal.value = false },
             onAddNewTodo = { todo ->
                 withContext(Dispatchers.Default) {
-                    val success = viewModel.addTodo(todo, userToken)
-                    if (success) {
-                        viewModel.fetchAll(userToken)
+                    val todoService = TodoService(userToken)
+                    val response = try {
+                        todoService.addTodo(todo)
+                    } catch (e: IOException) {
+                        snackBar.showSnackbar("Unable to connect to Server")
+                        return@withContext false
                     }
-                    return@withContext success
+
+                    if (!response.isSuccessful) {
+                        when(response.code) {
+                            in 400..499 -> snackBar.showSnackbar("Client Error")
+                            in 500..599 -> snackBar.showSnackbar("Server Error")
+                            else -> { }
+                        }
+                        return@withContext false
+                    }
+
+                    viewModel.syncTodos(userToken)
+                    return@withContext true
                 }
             }
         )
