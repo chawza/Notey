@@ -20,11 +20,18 @@ fun Response.raiseStatus(message: String? = null) {
     }
 }
 
-class TodoRepository(private val userToken: String) {
+interface TodoRepository {
+    suspend fun fetchAll(): List<Todo>
+    suspend fun deleteTodo(todo: Todo)
+
+    suspend fun addTodo(todo: Todo): Todo
+}
+
+class TodoAPIRepository(private val userToken: String): TodoRepository {
     private val jsonEncoder = Json { ignoreUnknownKeys = true }
 
     @OptIn(ExperimentalSerializationApi::class)
-    suspend fun fetchAll(): List<Todo> {
+    override suspend fun fetchAll(): List<Todo> {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)
@@ -51,7 +58,7 @@ class TodoRepository(private val userToken: String) {
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    suspend fun addTodo(todo: Todo): Todo {
+    override suspend fun addTodo(todo: Todo): Todo {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)
@@ -87,7 +94,7 @@ class TodoRepository(private val userToken: String) {
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    suspend fun deleteTodo(todo: Todo) {
+    override suspend fun deleteTodo(todo: Todo) {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)

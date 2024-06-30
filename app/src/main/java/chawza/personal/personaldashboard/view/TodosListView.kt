@@ -50,6 +50,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -259,16 +260,29 @@ fun TodoListView(
     }
 }
 
+class MockRepository: TodoRepository {
+    private val todos = mutableListOf<Todo>()
+    override suspend fun fetchAll(): List<Todo> = todos
+
+    override suspend fun deleteTodo(todo: Todo) {
+        todos.remove(todo)
+    }
+
+    override suspend fun addTodo(todo: Todo): Todo {
+        todos.add(todo)
+        return todos.find { it.id == todo.id }!!
+    }
+}
 @Preview
 @Composable
 fun TodoListPreview() {
-    val viewModel = TodoListVIewModel(todoRepository = TodoRepository("*****"))
+
     PersonalDashboardTheme {
-        val todos = listOf(
-            Todo(null, "lmao"),
-            Todo(null, "Task Two"),
-        )
-        viewModel.setTodos(todos)
-        TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = TodoRepository(""""""))
+        val repo = MockRepository()
+        runBlocking {
+            repo.addTodo(Todo(1, "LMAO", "Notes"))
+            repo.addTodo(Todo(2, "LMAO", null))
+        }
+        TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = repo)
     }
 }

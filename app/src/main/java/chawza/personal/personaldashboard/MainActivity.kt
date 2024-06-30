@@ -8,7 +8,7 @@ import androidx.compose.material3.SnackbarHostState
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
-import chawza.personal.personaldashboard.repository.TodoRepository
+import chawza.personal.personaldashboard.repository.TodoAPIRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import chawza.personal.personaldashboard.view.TodoListView
 import kotlinx.coroutines.flow.first
@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val todoRepository = TodoRepository(userToken)
+            val todoRepository = TodoAPIRepository(userToken)
             val todoListViewModel = TodoListVIewModel(todoRepository, SnackbarHostState())
 
             PersonalDashboardTheme {
