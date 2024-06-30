@@ -1,5 +1,6 @@
 package chawza.personal.personaldashboard.view
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
@@ -58,13 +60,13 @@ import java.io.IOException
 
 @Serializable
 data class Todo(
+    val id: Int? = null,
     val title: String,
     val note: String? = null,
     @SerialName("target_date")
     val targetDate: String? = null,
     val created: String? = null,
 )
-
 
 
 @Composable
@@ -101,15 +103,15 @@ fun AddTodoModal(
                     value = title,
                     singleLine = true,
                     onValueChange = { title = it },
-                    label = { Text(text = "Title")}
-                    )
+                    label = { Text(text = "Title") }
+                )
                 OutlinedTextField(
                     modifier = Modifier
                         .height(56.dp * 4)
                         .fillMaxWidth(),
                     value = note,
                     onValueChange = { note = it },
-                    label = { Text(text = "Note")}
+                    label = { Text(text = "Note") }
                 )
                 Button(
                     modifier = Modifier
@@ -119,18 +121,16 @@ fun AddTodoModal(
                         val newTodo = Todo(title = title, note = note.ifEmpty { null })
                         isLoading = true
 
-                        CoroutineScope(Dispatchers.Default).launch {
+                        CoroutineScope(Dispatchers.Main).launch {
                             try {
-                                if (onAddNewTodo(newTodo)) {
-                                    withContext(Dispatchers.Main) {
-                                        dismiss()
-                                    }
+                                val result = withContext(Dispatchers.IO) {
+                                    onAddNewTodo(newTodo)
                                 }
-                            }
-                            finally {
-                                withContext(Dispatchers.Main) {
-                                    isLoading = false
+                                if (result) {
+                                    dismiss()
                                 }
+                            } finally {
+                                isLoading = false
                             }
                         }
                     },
@@ -184,34 +184,55 @@ fun TodoListView(
         },
         topBar = {
             Row {
-                Text(text = "My Todos", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
+                Text(
+                    text = "My Todos",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(16.dp)
+                )
             }
         },
         snackbarHost = {
             SnackbarHost(hostState = snackBar)
         }
     ) { paddingValues ->
-        Box(modifier = Modifier
-            .padding(paddingValues)
-            .fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize(), contentAlignment = Alignment.Center
+        ) {
             LazyColumn {
                 items(todos.value) { todo ->
                     ListItem(
                         headlineContent = { Text(text = todo.title) },
-                        overlineContent = { }
+                        trailingContent = {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Delete Todo",
+                                tint = Color.Red,
+                                modifier = Modifier.clickable { 
+                                    CoroutineScope(Dispatchers.Default).launch {
+                                        val success = viewModel.deleteTodo(todo, userToken)
+                                        if (success) {
+                                            viewModel.fetchAll(userToken)
+                                        } else {
+                                            snackBar.showSnackbar("Delete Failed")
+                                        }
+                                    }
+                                })
+                        }
                     )
                     Divider()
                 }
             }
             if (todos.value.isEmpty()) {
-                Text(text = "No Todos") 
+                Text(text = "No Todos")
             }
         }
     }
 
     if (showAddTodoModal.value) {
         AddTodoModal(
-            dismiss = { showAddTodoModal.value = false},
+            dismiss = { showAddTodoModal.value = false },
             onAddNewTodo = { todo ->
                 withContext(Dispatchers.Default) {
                     val success = viewModel.addTodo(todo, userToken)
@@ -231,10 +252,10 @@ fun TodoListPreview() {
     val viewModel = TodoListVIewModel()
     PersonalDashboardTheme {
         val todos = listOf(
-            Todo("lmao", null, null, null),
-            Todo("Task Two", null, null, null),
+            Todo(null, "lmao"),
+            Todo(null, "Task Two"),
         )
         viewModel.setTodos(todos)
-        TodoListView(modifier = Modifier.fillMaxSize(), viewModel=viewModel)
+        TodoListView(modifier = Modifier.fillMaxSize(), viewModel = viewModel)
     }
 }

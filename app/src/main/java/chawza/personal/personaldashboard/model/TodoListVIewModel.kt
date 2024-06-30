@@ -91,4 +91,39 @@ class TodoListVIewModel: ViewModel() {
         }
         return false
     }
+
+    suspend fun deleteTodo(todo: Todo, token: String): Boolean {
+        val client = OkHttpClient()
+        val url = API.basicUrl()
+            .addPathSegments(API.TODO_LIST_VIEWSET)
+            .addPathSegment(todo.id.toString())
+            .build()
+
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", "Token $token")
+            .delete()
+            .build()
+
+        val response = withContext(Dispatchers.IO) {
+            client.newCall(request).execute()
+        }
+        response.close()
+
+        if (response.isSuccessful) {
+            return true
+        }
+
+        // TODO: Handle form error
+        when(response.code) {
+            in 400..499 -> {
+                // Form Error}
+            }
+            in 500 .. 599 -> {
+                // Server Error
+            }
+        }
+        return false
+    }
+
 }
