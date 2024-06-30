@@ -36,7 +36,6 @@ import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -134,7 +133,6 @@ class LoginActivity : ComponentActivity() {
         lateinit var response: Response
         try {
             withContext(Dispatchers.IO) {
-                delay(2000)
                 response = OkHttpClient().newCall(request).execute()
             }
         } catch (e: IOException) {

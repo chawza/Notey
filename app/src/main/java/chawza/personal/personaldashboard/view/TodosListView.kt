@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
@@ -79,15 +81,19 @@ fun AddButton(onCLick: () -> Unit) {
 @Composable
 fun AddTodoModal(
     modifier: Modifier = Modifier,
-    dismiss: () -> Unit,
-    onAddNewTodo: suspend (Todo) -> Boolean
+    dismiss: (sync: Boolean) -> Unit,
+    onAddNewTodo: suspend (Todo) -> Boolean,
 ) {
-    Dialog(onDismissRequest = dismiss) {
+    var isLoading by remember { mutableStateOf(false) }
+    val closable by remember { derivedStateOf { !isLoading } }
+
+    Dialog(
+        onDismissRequest = { dismiss(false) },
+        properties = DialogProperties(dismissOnClickOutside = closable, dismissOnBackPress = closable)
+    ) {
         var title by remember { mutableStateOf("") }
         var note by remember { mutableStateOf("") }
         var targetDate by remember { mutableStateOf("") }
-
-        var isLoading by remember { mutableStateOf(false) }
 
         Surface(
             modifier = modifier
@@ -123,11 +129,11 @@ fun AddTodoModal(
 
                         CoroutineScope(Dispatchers.Main).launch {
                             try {
-                                val result = withContext(Dispatchers.IO) {
+                                val result = withContext(Dispatchers.Default) {
                                     onAddNewTodo(newTodo)
                                 }
                                 if (result) {
-                                    dismiss()
+                                    dismiss(true)
                                 }
                             } finally {
                                 isLoading = false
@@ -138,10 +144,7 @@ fun AddTodoModal(
                     shape = MaterialTheme.shapes.small
                 ) {
                     Text(text = "Create")
-                    Divider(modifier.width(20.dp))
-                    if (isLoading) {
-                        CircularProgressIndicator(color = Color.White)
-                    }
+                    Spacer(modifier.width(20.dp))
                 }
             }
 
@@ -244,7 +247,13 @@ fun TodoListView(
 
     if (showAddTodoModal.value) {
         AddTodoModal(
-            dismiss = { showAddTodoModal.value = false },
+            dismiss = { sync ->
+                showAddTodoModal.value = false
+                if (sync)
+                    CoroutineScope(Dispatchers.Default).launch {
+                        viewModel.syncTodos(userToken)
+                    }
+            },
             onAddNewTodo = { todo ->
                 withContext(Dispatchers.Default) {
                     val todoService = TodoService(userToken)
@@ -263,8 +272,6 @@ fun TodoListView(
                         }
                         return@withContext false
                     }
-
-                    viewModel.syncTodos(userToken)
                     return@withContext true
                 }
             }
