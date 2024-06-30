@@ -188,7 +188,8 @@ fun TodoListView(
         Box(
             modifier = Modifier
                 .padding(paddingValues)
-                .fillMaxSize(), contentAlignment = Alignment.Center
+                .fillMaxSize(),
+            contentAlignment = Alignment.TopStart
         ) {
             LazyColumn {
                 items(todos.value) { todo ->
