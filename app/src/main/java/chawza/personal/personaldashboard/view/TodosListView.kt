@@ -39,20 +39,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
-import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.repository.TodoRepository
+import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -156,17 +153,12 @@ fun AddTodoModal(
 fun TodoListView(
     modifier: Modifier = Modifier,
     todoRepository: TodoRepository,
-    viewModel: TodoListVIewModel,
+    viewModel: TodoListVIewModel = TodoListVIewModel(todoRepository)
 ) {
-    val ctx = LocalContext.current
     val todos = viewModel.todos.collectAsState()
     val snackBar = viewModel.snackBar
     val showAddTodoModal = remember { mutableStateOf(false) }
-    val userToken = remember {
-        runBlocking {
-            ctx.userStore.data.first()[USER_TOKEN_KEY]!!
-        }
-    }
+
 
     LaunchedEffect(true) {
         viewModel.syncTodos()
@@ -267,16 +259,16 @@ fun TodoListView(
     }
 }
 
-//@Preview
-//@Composable
-//fun TodoListPreview() {
-//    val viewModel = TodoListVIewModel(TodoRepository(""""""))
-//    PersonalDashboardTheme {
-//        val todos = listOf(
-//            Todo(null, "lmao"),
-//            Todo(null, "Task Two"),
-//        )
-//        viewModel.setTodos(todos)
-//        TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = TodoRepository(""""""), viewModel = viewModel)
-//    }
-//}
+@Preview
+@Composable
+fun TodoListPreview() {
+    val viewModel = TodoListVIewModel(todoRepository = TodoRepository("*****"))
+    PersonalDashboardTheme {
+        val todos = listOf(
+            Todo(null, "lmao"),
+            Todo(null, "Task Two"),
+        )
+        viewModel.setTodos(todos)
+        TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = TodoRepository(""""""))
+    }
+}

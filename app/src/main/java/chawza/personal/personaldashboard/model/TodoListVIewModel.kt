@@ -15,7 +15,7 @@ import java.io.IOException
 
 class TodoListVIewModel(
     private val todoRepository: TodoRepository,
-    val snackBar: SnackbarHostState
+    val snackBar: SnackbarHostState = SnackbarHostState()
 ) : ViewModel() {
     private val _todos = MutableStateFlow<List<Todo>>(listOf())
 
