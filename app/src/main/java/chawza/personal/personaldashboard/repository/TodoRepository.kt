@@ -4,16 +4,27 @@ import chawza.personal.personaldashboard.core.API
 import chawza.personal.personaldashboard.view.Todo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-class TodoService(private val userToken: String) {
-    suspend fun fetchAll(): Response {
+fun Response.raiseStatus(message: String? = null) {
+    if (this.code in 400..599) {
+        throw Exception(message?.let { "Request Error [${this.code}]" })
+    }
+}
+
+class TodoRepository(private val userToken: String) {
+    private val jsonEncoder = Json { ignoreUnknownKeys = true }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend fun fetchAll(): List<Todo> {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)
@@ -25,12 +36,22 @@ class TodoService(private val userToken: String) {
             .get()
             .build()
 
-        return withContext(Dispatchers.IO) {
+        val response = withContext(Dispatchers.IO) {
             client.newCall(request).execute()
         }
+        response.raiseStatus("Error fetching todos")
+
+        val todos: List<Todo> = withContext(Dispatchers.Default) {
+            jsonEncoder.decodeFromStream(response.body!!.byteStream())
+        }
+        response.close()
+
+        return todos
+
     }
 
-    suspend fun addTodo(todo: Todo): Response{
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend fun addTodo(todo: Todo): Todo {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)
@@ -45,12 +66,28 @@ class TodoService(private val userToken: String) {
             .post(requestBody)
             .build()
 
-        return withContext(Dispatchers.IO) {
-            client.newCall(request).execute()
+        val response = withContext(Dispatchers.IO) {
+            try {
+                client.newCall(request).execute()
+            } catch (e: Error) {
+                throw Error("Failed to add task")
+            }
         }
+
+        if (!response.isSuccessful) {
+            throw Error("Failed to add task")
+        }
+
+        val newTodo = withContext(Dispatchers.Default) {
+            json.decodeFromStream<Todo>(response.body!!.byteStream())
+        }
+        response.close()
+
+        return newTodo
     }
 
-    suspend fun deleteTodo(todo: Todo): Response {
+    @OptIn(ExperimentalSerializationApi::class)
+    suspend fun deleteTodo(todo: Todo) {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)
@@ -64,8 +101,14 @@ class TodoService(private val userToken: String) {
             .delete()
             .build()
 
-        return withContext(Dispatchers.IO) {
+        val response = withContext(Dispatchers.IO) {
             client.newCall(request).execute()
         }
+
+        if (!response.isSuccessful) {
+            response.raiseStatus("Unable To Delete \"${todo.title}\"")
+        }
+        response.close()
+
     }
 }

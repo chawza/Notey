@@ -24,8 +24,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,17 +40,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
-import chawza.personal.personaldashboard.repository.TodoService
-import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
+import chawza.personal.personaldashboard.repository.TodoRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -81,15 +80,18 @@ fun AddButton(onCLick: () -> Unit) {
 @Composable
 fun AddTodoModal(
     modifier: Modifier = Modifier,
-    dismiss: (sync: Boolean) -> Unit,
+    dismiss: () -> Unit,
     onAddNewTodo: suspend (Todo) -> Boolean,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val closable by remember { derivedStateOf { !isLoading } }
 
     Dialog(
-        onDismissRequest = { dismiss(false) },
-        properties = DialogProperties(dismissOnClickOutside = closable, dismissOnBackPress = closable)
+        onDismissRequest = { dismiss() },
+        properties = DialogProperties(
+            dismissOnClickOutside = closable,
+            dismissOnBackPress = closable
+        )
     ) {
         var title by remember { mutableStateOf("") }
         var note by remember { mutableStateOf("") }
@@ -129,12 +131,9 @@ fun AddTodoModal(
 
                         CoroutineScope(Dispatchers.Main).launch {
                             try {
-                                val result = withContext(Dispatchers.Default) {
-                                    onAddNewTodo(newTodo)
-                                }
-                                if (result) {
-                                    dismiss(true)
-                                }
+                                val success = onAddNewTodo(newTodo)
+                                if (success)
+                                    dismiss()
                             } finally {
                                 isLoading = false
                             }
@@ -155,12 +154,13 @@ fun AddTodoModal(
 
 @Composable
 fun TodoListView(
-    viewModel: TodoListVIewModel,
     modifier: Modifier = Modifier,
+    todoRepository: TodoRepository,
+    viewModel: TodoListVIewModel,
 ) {
     val ctx = LocalContext.current
     val todos = viewModel.todos.collectAsState()
-    val snackBar = remember { SnackbarHostState() }
+    val snackBar = viewModel.snackBar
     val showAddTodoModal = remember { mutableStateOf(false) }
     val userToken = remember {
         runBlocking {
@@ -169,17 +169,7 @@ fun TodoListView(
     }
 
     LaunchedEffect(true) {
-        try {
-            viewModel.syncTodos(userToken)
-        } catch (e: IOException) {
-            withContext(Dispatchers.Main) {
-                snackBar.showSnackbar("Unable connected to Server")
-            }
-        } catch (e: Error) {
-            e.message?.let {
-                snackBar.showSnackbar(it)
-            }
-        }
+        viewModel.syncTodos()
     }
 
     Scaffold(
@@ -216,21 +206,28 @@ fun TodoListView(
                                 Icons.Filled.Delete,
                                 contentDescription = "Delete Todo",
                                 tint = Color.Red,
-                                modifier = Modifier.clickable { 
+                                modifier = Modifier.clickable {
                                     CoroutineScope(Dispatchers.Default).launch {
-                                        val todoService = TodoService(userToken)
-
-                                        val response = try {
-                                            todoService.deleteTodo(todo)
-                                        } catch (e: IOException) {
-                                            snackBar.showSnackbar("Unable to connect to Server")
+                                        try {
+                                            todoRepository.deleteTodo(todo)
+                                        } catch (e: Exception) {
+                                            val message = when (e) {
+                                                is IOException -> "Unable to connect to Server"
+                                                else -> e.message ?: "Unable to Delete Todo"
+                                            }
+                                            snackBar.showSnackbar(message)
                                             return@launch
                                         }
 
-                                        if (response.isSuccessful) {
-                                            viewModel.syncTodos(userToken)
-                                        } else {
-                                            snackBar.showSnackbar("Delete Failed")
+                                        viewModel.syncTodos()
+
+                                        withContext(Dispatchers.Main) {
+                                            val message =
+                                                "Task \"${todo.title}\"task has been deleted"
+                                            snackBar.showSnackbar(
+                                                message,
+                                                duration = SnackbarDuration.Short
+                                            )
                                         }
                                     }
                                 })
@@ -247,48 +244,39 @@ fun TodoListView(
 
     if (showAddTodoModal.value) {
         AddTodoModal(
-            dismiss = { sync ->
+            dismiss = {
                 showAddTodoModal.value = false
-                if (sync)
-                    CoroutineScope(Dispatchers.Default).launch {
-                        viewModel.syncTodos(userToken)
-                    }
             },
             onAddNewTodo = { todo ->
-                withContext(Dispatchers.Default) {
-                    val todoService = TodoService(userToken)
-                    val response = try {
-                        todoService.addTodo(todo)
-                    } catch (e: IOException) {
-                        snackBar.showSnackbar("Unable to connect to Server")
-                        return@withContext false
-                    }
-
-                    if (!response.isSuccessful) {
-                        when(response.code) {
-                            in 400..499 -> snackBar.showSnackbar("Client Error")
-                            in 500..599 -> snackBar.showSnackbar("Server Error")
-                            else -> { }
+                CoroutineScope(Dispatchers.Default).async {
+                    val createdTodo = try {
+                        todoRepository.addTodo(todo)
+                    } catch (e: Exception) {
+                        val message = when (e) {
+                            is IOException -> "Unable to connect to Server"
+                            else -> e.message ?: "Unable to add task"
                         }
-                        return@withContext false
+                        snackBar.showSnackbar(message)
+                        return@async false
                     }
-                    return@withContext true
-                }
+                    viewModel.syncTodos()
+                    return@async true
+                }.await()
             }
         )
     }
 }
 
-@Preview
-@Composable
-fun TodoListPreview() {
-    val viewModel = TodoListVIewModel()
-    PersonalDashboardTheme {
-        val todos = listOf(
-            Todo(null, "lmao"),
-            Todo(null, "Task Two"),
-        )
-        viewModel.setTodos(todos)
-        TodoListView(modifier = Modifier.fillMaxSize(), viewModel = viewModel)
-    }
-}
+//@Preview
+//@Composable
+//fun TodoListPreview() {
+//    val viewModel = TodoListVIewModel(TodoRepository(""""""))
+//    PersonalDashboardTheme {
+//        val todos = listOf(
+//            Todo(null, "lmao"),
+//            Todo(null, "Task Two"),
+//        )
+//        viewModel.setTodos(todos)
+//        TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = TodoRepository(""""""), viewModel = viewModel)
+//    }
+//}
