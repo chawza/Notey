@@ -69,8 +69,8 @@ fun LoginView() {
     val context = LocalContext.current
     val snackBar = remember { SnackbarHostState() }
 
-    val email = remember { mutableStateOf("budi@asd.com") }
-    val password = remember { mutableStateOf("mountain") }
+    val email = remember { mutableStateOf("") }
+    val password = remember { mutableStateOf("") }
     val isLoggingIn = remember { mutableStateOf(false) }
 
     suspend fun login(email: String, password: String): Result<String> {
