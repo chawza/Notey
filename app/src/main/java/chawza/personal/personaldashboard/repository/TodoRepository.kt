@@ -129,54 +129,40 @@ class TodoAPIRepository(private val userToken: String): TodoRepository {
 class TodoPocketBaseRepository(private val token: String): TodoRepository {
     private val jsonEncoder = Json { ignoreUnknownKeys = true }
 
-    override suspend fun fetchAll(): Result<List<Todo>> {
-        try {
-            val response = withContext(Dispatchers.IO) {
-                val client = OkHttpClient()
-                val url = API.basicUrl()
-                    .addPathSegments(API.TODO_ENDPOINT)
-                    .build()
+    override suspend fun fetchAll(): Result<List<Todo>> = withContext(Dispatchers.IO) {
+        val client = OkHttpClient()
+        val url = API.basicUrl()
+            .addPathSegments(API.TODO_ENDPOINT)
+            .build()
 
-                val request = Request.Builder()
-                    .url(url)
-                    .addHeader("Authorization", token)
-                    .get()
-                    .build()
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", token)
+            .get()
+            .build()
 
-                client.newCall(request).execute()
-            }
+        val response = client.newCall(request).execute()
 
-            if (!response.isSuccessful) {
-                if (response.code in 400..499) {
-                    val responseJson = JSONObject(response.body!!.string())
-                    return Result.failure(Exception(responseJson.getString("message")))
-                }
-                return Result.failure(Exception(response.message))
-            }
-
-            return withContext(Dispatchers.Default) {
+        if (!response.isSuccessful) {
+            if (response.code in 400..499) {
                 val responseJson = JSONObject(response.body!!.string())
-                response.close()
-
-                val recordList = responseJson.getJSONArray("items")
-                val todos: MutableList<Todo> = mutableListOf()
-
-                Log.d("TESTING", responseJson.toString(4))
-
-                for (idx in 0..< recordList.length()) {
-                    todos.add(jsonEncoder.decodeFromString<Todo>(recordList.getJSONObject(idx).toString()))
-                }
-
-                Log.d("TESTING", "LENGHT $todos.size")
-
-                return@withContext Result.success(todos)
+                return@withContext Result.failure(Exception(responseJson.getString("message")))
             }
-        } catch (e: Exception) {
-            val error = when(e) {
-                is IOException -> Exception("Unable to connect to server")
-                else -> e
+            return@withContext Result.failure(Exception(response.message))
+        }
+
+        val responseJson = JSONObject(response.body!!.string())
+        response.close()
+
+        return@withContext withContext(Dispatchers.Default) {
+            val recordList = responseJson.getJSONArray("items")
+            val todos: MutableList<Todo> = mutableListOf()
+
+            for (idx in 0..< recordList.length()) {
+                todos.add(jsonEncoder.decodeFromString<Todo>(recordList.getJSONObject(idx).toString()))
             }
-            return Result.failure(error)
+
+            Result.success(todos)
         }
     }
 
