@@ -1,6 +1,7 @@
 package chawza.personal.personaldashboard.view
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,11 +30,20 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.findViewTreeLifecycleOwner
+import chawza.personal.personaldashboard.core.API
 import chawza.personal.personaldashboard.view.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,10 +61,10 @@ class LoginActivity : ComponentActivity() {
 @Composable
 fun LoginView() {
     val email = remember {
-        mutableStateOf("")
+        mutableStateOf("budi@asd.com")
     }
     val password = remember {
-        mutableStateOf("")
+        mutableStateOf("mountain")
     }
 
     val isLoggingIn = remember {
@@ -67,6 +77,37 @@ fun LoginView() {
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackBar)}
     ) {
+        suspend fun login(email: String, password: String): Result<String> {
+            val url = API.basicUrl()
+                .addPathSegments(API.AUTH_LOGIN)
+                .build()
+
+            val requestBody = JSONObject()
+                .put("identity", email)
+                .put("password", password)
+                .toString()
+                .toRequestBody(
+                    "application/json".toMediaType()
+                )
+
+            return runCatching {
+                val response = withContext(Dispatchers.IO) {
+                    val request: Request = Request.Builder().url(url).post(requestBody).build()
+                    val client = OkHttpClient()
+                    client.newCall(request).execute()
+                }
+
+                if (response.isSuccessful) {
+                    val responseJSON = JSONObject(response.body!!.string())
+                    return Result.success(responseJSON.getString("token"))
+                }
+                else if (response.code in 400..499 && response.body != null) {
+                    val jsonResponse = JSONObject(response.body!!.string())
+                    return Result.failure(Exception(jsonResponse["message"].toString()))
+                }
+                return Result.failure(Exception(response.message))
+            }
+        }
         Box(modifier = Modifier.padding(it).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Column(
                 modifier = Modifier
@@ -95,7 +136,13 @@ fun LoginView() {
                     onClick = {
                         isLoggingIn.value = true
                         CoroutineScope(Dispatchers.Main).launch {
-                            snackBar.showSnackbar("Logging in")
+                            val result = login(email.value, password.value)
+                            result.onSuccess { token ->
+                                snackBar.showSnackbar("Token: $token")
+                            }
+                            .onFailure { error ->
+                                snackBar.showSnackbar(error.message ?: "Something went wrong")
+                            }
                             isLoggingIn.value = false
                         }
                     },

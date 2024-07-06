@@ -4,11 +4,13 @@ import okhttp3.HttpUrl
 
 object API {
     val HOST = "192.168.1.15"
-    val PORT = 8000
+    val PORT = 8090
     val SCHEMA = "http"
 
     val GET_TOKEN = "api/auth/get-token"
     val TODO_LIST_VIEWSET = "api/todos/"
+
+    val AUTH_LOGIN = "api/collections/users/auth-with-password"
 
     val TOKEN = "45dccb135d6583657922bfdf8bb06dda11133bc0"
 
