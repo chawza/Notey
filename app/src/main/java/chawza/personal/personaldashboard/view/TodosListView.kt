@@ -1,5 +1,6 @@
 package chawza.personal.personaldashboard.view
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,14 +11,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -26,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,16 +47,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.datastore.preferences.core.edit
+import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
+import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.repository.TodoRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -59,15 +72,65 @@ import java.io.IOException
 
 @Serializable
 data class Todo(
-    val id: Int? = null,
+    val id: String? = null,
     val title: String,
     val note: String? = null,
-    @SerialName("target_date")
-    val targetDate: String? = null,
-    val created: String? = null,
+//    @SerialName("target_date")
+//    val targetDate: String? = null,
+//    val created: String? = null,
 )
 
+@Composable
+fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit) {
+    val showMenu = remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row {  // left area
+            Text(
+                text = "My Todos",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(16.dp)
+            )
+            if (isLoading) {
+                CircularProgressIndicator()
+            }
+        }
+        Row {  // right area
+            Box {
+                IconButton(
+                    onClick = { showMenu.value = true }
+                ) {
+                    Icon(Icons.Filled.AccountCircle, contentDescription = "Users")
+                }
+                AccountMenu(showMenu.value, dismiss = {showMenu.value = false}, requestLogout=requestLogout)
+            }
+        }
+    }
+}
 
+@Composable
+fun AccountMenu(show: Boolean = false, dismiss: () -> Unit, requestLogout: () -> Unit) {
+    DropdownMenu(expanded = show, onDismissRequest = dismiss) {
+        DropdownMenuItem(
+            text = { Text("Logout", color = Color.Black) },
+            onClick = requestLogout,
+            trailingIcon = { Icons.Filled.ExitToApp}
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewTopBar() {
+    PersonalDashboardTheme {
+        Surface(modifier = Modifier.width(400.dp)) {
+            TopBar(false, { })
+        }
+    }
+}
 @Composable
 fun AddButton(onCLick: () -> Unit) {
     IconButton(onClick = onCLick) {
@@ -154,15 +217,23 @@ fun AddTodoModal(
 fun TodoListView(
     modifier: Modifier = Modifier,
     todoRepository: TodoRepository,
-    viewModel: TodoListVIewModel = TodoListVIewModel(todoRepository)
+    viewModel: TodoListVIewModel = TodoListVIewModel(todoRepository, SnackbarHostState())
 ) {
+    val context = LocalContext.current
     val todos = viewModel.todos.collectAsState()
     val snackBar = viewModel.snackBar
     val showAddTodoModal = remember { mutableStateOf(false) }
+    val isSyncing = remember { mutableStateOf(false) }
+
+    val isLoading = isSyncing.value
 
 
     LaunchedEffect(true) {
-        viewModel.syncTodos()
+        launch {
+            isSyncing.value = true
+            viewModel.syncTodos()
+            isSyncing.value = false
+        }
     }
 
     Scaffold(
@@ -173,13 +244,17 @@ fun TodoListView(
             })
         },
         topBar = {
-            Row {
-                Text(
-                    text = "My Todos",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
+            TopBar(
+                isLoading,
+                requestLogout = {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        context.userStore.edit { data ->
+                            data.remove(USER_TOKEN_KEY)
+                        }
+                        context.startActivity(Intent(context, LoginActivity::class.java))
+                    }
+                }
+            )
         },
         snackbarHost = {
             SnackbarHost(hostState = snackBar)
@@ -263,7 +338,7 @@ fun TodoListView(
 
 class MockRepository: TodoRepository {
     private val todos = mutableListOf<Todo>()
-    override suspend fun fetchAll(): List<Todo> = todos
+    override suspend fun fetchAll(): Result<List<Todo>> = Result.success(todos)
 
     override suspend fun deleteTodo(todo: Todo) {
         todos.remove(todo)
@@ -281,8 +356,8 @@ fun TodoListPreview() {
     PersonalDashboardTheme {
         val repo = MockRepository()
         runBlocking {
-            repo.addTodo(Todo(1, "LMAO", "Notes"))
-            repo.addTodo(Todo(2, "LMAO", null))
+            repo.addTodo(Todo("1", "LMAO", "Notes"))
+            repo.addTodo(Todo("2", "LMAO", null))
         }
         TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = repo)
     }

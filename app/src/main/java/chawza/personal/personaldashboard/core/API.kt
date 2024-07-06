@@ -10,7 +10,9 @@ object API {
     val GET_TOKEN = "api/auth/get-token"
     val TODO_LIST_VIEWSET = "api/todos/"
 
+    // pocket base
     val AUTH_LOGIN = "api/collections/users/auth-with-password"
+    val TODO_ENDPOINT = "api/collections/todo/records"
 
     val TOKEN = "45dccb135d6583657922bfdf8bb06dda11133bc0"
 

@@ -65,7 +65,7 @@ dependencies {
     implementation(libs.jetbrains.kotlinx.serialization.json)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.lifecycle.viewmodel)
-
+    implementation(libs.androidx.datastore.preferences)
 
 
     testImplementation(libs.junit)

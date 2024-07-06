@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import chawza.personal.personaldashboard.repository.TodoAPIRepository
 import chawza.personal.personaldashboard.repository.TodoRepository
 import chawza.personal.personaldashboard.view.Todo
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,19 +29,16 @@ class TodoListVIewModel(
 
     suspend fun syncTodos() {
         viewModelScope.launch {
-            val todos = try {
-                todoRepository.fetchAll()
-            } catch (e: Exception) {
-                val message = when (e) {
-                    is IOException -> "Connection Error"
-                    else -> e.message ?: "Request Error"
+            val todos = todoRepository.fetchAll()
+            todos
+                .onSuccess {
+                    setTodos(it)
                 }
-                withContext(Dispatchers.Main) {
-                    snackBar.showSnackbar(message)
+                .onFailure {
+                    viewModelScope.launch {
+                        snackBar.showSnackbar(it.message ?: "Something went wrong")
+                    }
                 }
-                return@launch
-            }
-            setTodos(todos)
         }
     }
 }

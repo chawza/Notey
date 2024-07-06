@@ -9,7 +9,9 @@ import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
 import chawza.personal.personaldashboard.repository.TodoAPIRepository
+import chawza.personal.personaldashboard.repository.TodoPocketBaseRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
+import chawza.personal.personaldashboard.view.LoginActivity
 import chawza.personal.personaldashboard.view.TodoListView
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -25,11 +27,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val todoRepository = TodoAPIRepository(userToken)
-            val todoListViewModel = TodoListVIewModel(todoRepository, SnackbarHostState())
-
             PersonalDashboardTheme {
-                TodoListView(todoRepository = todoRepository, viewModel = todoListViewModel)
+                TodoListView(todoRepository = TodoPocketBaseRepository(userToken))
             }
         }
     }
