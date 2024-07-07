@@ -1,12 +1,16 @@
 package chawza.personal.personaldashboard.view
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,13 +40,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -58,6 +65,7 @@ import chawza.personal.personaldashboard.repository.TodoRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -160,9 +168,12 @@ fun TodoListView(
     val todos = viewModel.todos.collectAsState()
     val snackBar = remember { SnackbarHostState() }
 
-    val showAddTodoModal = remember { mutableStateOf(false) }
+    val showAddTodoPane = remember { mutableStateOf(false) }
+    val selectedTodo = viewModel.selectedTodo.collectAsState()
+
     val isSyncing = remember { mutableStateOf(false) }
-    val isLoading = remember { derivedStateOf { isSyncing.value } }
+    val isUpdating = remember { mutableStateOf(false) }
+    val isLoading = remember { derivedStateOf { isSyncing.value || isUpdating.value } }
 
     fun syncTodos() {
         viewModel.viewModelScope.launch {
@@ -181,9 +192,34 @@ fun TodoListView(
         }
     }
 
-
     LaunchedEffect(true) {
         syncTodos()
+    }
+
+    suspend fun handleAddTodo(todo: NewTodo) {
+        withContext(Dispatchers.Main) {
+            todo.userId = context.userStore.data.first()[USER_ID]!!
+            val result = todoRepository.addTodo(todo)
+            result.onFailure { error ->
+                launch {
+                    snackBar.showSnackbar(
+                        error.message ?: "Something wrong happened"
+                    )
+                }
+                return@withContext
+            }
+
+            val createdTodo: Todo = result.getOrThrow()
+            showAddTodoPane.value = false
+
+            launch {
+                snackBar.showSnackbar(
+                    "Task \"${createdTodo.title}\" task has been Added",
+                    duration = SnackbarDuration.Short
+                )
+            }
+            syncTodos()
+        }
     }
 
     Scaffold(
@@ -191,7 +227,7 @@ fun TodoListView(
         floatingActionButton = {
             AddButton(
                 onCLick = {
-                    showAddTodoModal.value = true
+                    showAddTodoPane.value = true
                 }
             )
         },
@@ -215,87 +251,106 @@ fun TodoListView(
             SnackbarHost(hostState = snackBar)
         }
     ) { paddingValues ->
-        Box(
+        Row(
             modifier = Modifier
                 .padding(paddingValues)
-                .fillMaxSize(),
-            contentAlignment = Alignment.TopStart
+                .fillMaxSize()
         ) {
-            LazyColumn {
-                items(todos.value) { todo ->
-                    ListItem(
-                        headlineContent = { Text(text = todo.title) },
-                        trailingContent = {
-                            Icon(
-                                Icons.Filled.Delete,
-                                contentDescription = "Delete Todo",
-                                tint = Color.Red,
-                                modifier = Modifier.clickable {
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        val success = todoRepository.deleteTodo(todo)
-
-                                        success.onFailure { error ->
-                                            snackBar.showSnackbar(
-                                                error.message ?: "Something wrong happened"
-                                            )
-                                            return@launch
-                                        }
-
-                                        syncTodos()
-
-                                        // TODO: Add button to undo deleted task by clicking trailing icon
-                                        snackBar.showSnackbar(
-                                            "Task \"${todo.title}\" task has been deleted",
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    }
+            val leftAreaWidth = remember {
+                derivedStateOf { if (selectedTodo.value == null) 1f else .5f }
+            }
+            // left size
+            Surface(modifier = Modifier
+                .fillMaxHeight()
+                .animateContentSize()
+                .fillMaxWidth(leftAreaWidth.value)) {
+                LazyColumn {
+                    items(todos.value) { todo ->
+                        ListItem(
+                            headlineContent = { Text(text = todo.title) },
+                            modifier = Modifier.clickable {
+                                if (selectedTodo.value != todo) {
+                                    viewModel.selectTodo(todo)
+                                } else {
+                                    viewModel.unSelectTodo()
                                 }
-                            )
-                        }
-                    )
-                    Divider()
+                            },
+                            trailingContent = {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Delete Todo",
+                                    tint = Color.Red,
+                                    modifier = Modifier.clickable {
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            val success = todoRepository.deleteTodo(todo)
+
+                                            success.onFailure { error ->
+                                                snackBar.showSnackbar(
+                                                    error.message ?: "Something wrong happened"
+                                                )
+                                                return@launch
+                                            }
+
+                                            if (selectedTodo.value == todo) {
+                                                viewModel.unSelectTodo()
+                                            }
+
+                                            syncTodos()
+
+                                            // TODO: Add button to undo deleted task by clicking trailing icon
+                                            snackBar.showSnackbar(
+                                                "Task \"${todo.title}\" task has been deleted",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                        Divider()
+                    }
+                }
+                if (todos.value.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = "No Todos")
+                    }
                 }
             }
-            if (todos.value.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "No Todos")
+
+            if (selectedTodo.value != null) {  // Edit Pane
+                AnimatedVisibility(visible = selectedTodo.value != null) {
+                    key(selectedTodo.value) {
+                        TodoFormView(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(1f),
+                            initial = selectedTodo.value,
+                            onUpdateRequest = {
+                                withContext(Dispatchers.Main) {
+                                    isUpdating.value = true
+                                    delay(2000)
+                                    isUpdating.value = false
+                                }
+                            },
+                            onAddRequest = { }
+                        )
+                    }
                 }
             }
         }
-    }
-
-    if (showAddTodoModal.value) {
-        AddTodoModal(
-            dismiss = {
-                showAddTodoModal.value = false
-            },
-            onAddNewTodo = { todo ->
-                withContext(Dispatchers.Main) {
-                    todo.userId = context.userStore.data.first()[USER_ID]!!
-                    val result = todoRepository.addTodo(todo)
-                    result.onFailure { error ->
-                        launch {
-                            snackBar.showSnackbar(
-                                error.message ?: "Something wrong happened"
-                            )
-                        }
-                        return@withContext
+        if (showAddTodoPane.value) {
+            Dialog(
+                onDismissRequest = { showAddTodoPane.value = false },
+            ) {
+                TodoFormView(
+                    initial = null,
+                    onUpdateRequest = { throw Exception("Unhandled Error") },
+                    onAddRequest = { newTodo ->
+                        handleAddTodo(newTodo)
                     }
-
-                    val createdTodo: Todo = result.getOrThrow()
-                    showAddTodoModal.value = false
-
-                    launch {
-                        snackBar.showSnackbar(
-                            "Task \"${createdTodo.title}\" task has been Added",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-
-                    syncTodos()
-                }
+                )
             }
-        )
+        }
     }
 }
 

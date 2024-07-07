@@ -1,8 +1,10 @@
 package chawza.personal.personaldashboard.view
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import chawza.personal.personaldashboard.repository.NewTodo
 import chawza.personal.personaldashboard.repository.Todo
@@ -27,7 +30,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun TodoFormView(
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
     initial: Todo?,
     onUpdateRequest: suspend (Todo) -> Unit,
     onAddRequest: suspend (NewTodo) -> Unit
@@ -53,6 +56,7 @@ fun TodoFormView(
     ) {
         Column(
             modifier = Modifier
+                .fillMaxSize()
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
