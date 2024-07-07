@@ -1,6 +1,7 @@
 package chawza.personal.personaldashboard.repository
 
 import chawza.personal.personaldashboard.core.API
+import chawza.personal.personaldashboard.view.NewTodo
 import chawza.personal.personaldashboard.view.Todo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,9 +23,9 @@ fun Response.raiseStatus(message: String? = null) {
 
 interface TodoRepository {
     suspend fun fetchAll(): Result<List<Todo>>
-    suspend fun deleteTodo(todo: Todo)
+    suspend fun deleteTodo(todo: Todo): Result<Unit>
 
-    suspend fun addTodo(todo: Todo): Todo
+    suspend fun addTodo(todo: NewTodo):  Result<Todo>
 }
 
 class TodoAPIRepository(private val userToken: String): TodoRepository {
@@ -58,10 +59,10 @@ class TodoAPIRepository(private val userToken: String): TodoRepository {
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    override suspend fun addTodo(todo: Todo): Todo {
+    override suspend fun addTodo(todo: NewTodo): Result<Todo>{
         val client = OkHttpClient()
         val url = API.basicUrl()
-            .addPathSegments(API.TODO_LIST_VIEWSET)
+            .addPathSegments(API.TODO_ENDPOINT)
             .build()
 
         val json = Json { ignoreUnknownKeys = true }
@@ -90,14 +91,13 @@ class TodoAPIRepository(private val userToken: String): TodoRepository {
         }
         response.close()
 
-        return newTodo
+        return Result.success(newTodo)
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
-    override suspend fun deleteTodo(todo: Todo) {
+    override suspend fun deleteTodo(todo: Todo): Result<Unit> {
         val client = OkHttpClient()
         val url = API.basicUrl()
-            .addPathSegments(API.TODO_LIST_VIEWSET)
+            .addPathSegments(API.TODO_ENDPOINT)
             .addPathSegment(todo.id.toString())
             .addPathSegment("")  // for some reason should ends with `/`
             .build()
@@ -117,5 +117,6 @@ class TodoAPIRepository(private val userToken: String): TodoRepository {
         }
         response.close()
 
+        return Result.success(Unit)
     }
 }

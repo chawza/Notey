@@ -62,14 +62,16 @@ import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.io.IOException
+import java.util.UUID
 
+@Serializable
+data class NewTodo(
+    val title: String,
+    val note: String? = null,
+)
 
 @Serializable
 data class Todo(
@@ -143,7 +145,7 @@ fun AddButton(onCLick: () -> Unit) {
 fun AddTodoModal(
     modifier: Modifier = Modifier,
     dismiss: () -> Unit,
-    onAddNewTodo: suspend (Todo) -> Boolean,
+    onAddNewTodo: suspend (NewTodo) -> Boolean,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val closable by remember { derivedStateOf { !isLoading } }
@@ -188,7 +190,7 @@ fun AddTodoModal(
                         .fillMaxWidth()
                         .height(56.dp),
                     onClick = {
-                        val newTodo = Todo(title = title, note = note.ifEmpty { null })
+                        val newTodo = NewTodo(title = title, note = note.ifEmpty { null })
                         isLoading = true
 
                         CoroutineScope(Dispatchers.Main).launch {
@@ -218,11 +220,11 @@ fun AddTodoModal(
 fun TodoListView(
     modifier: Modifier = Modifier,
     todoRepository: TodoRepository,
-    viewModel: TodoListVIewModel = TodoListVIewModel(todoRepository, SnackbarHostState())
+    viewModel: TodoListVIewModel = TodoListVIewModel()
 ) {
     val context = LocalContext.current
     val todos = viewModel.todos.collectAsState()
-    val snackBar = viewModel.snackBar
+    val snackBar = SnackbarHostState()
     val showAddTodoModal = remember { mutableStateOf(false) }
     val isSyncing = remember { mutableStateOf(false) }
 
@@ -288,28 +290,23 @@ fun TodoListView(
                                 contentDescription = "Delete Todo",
                                 tint = Color.Red,
                                 modifier = Modifier.clickable {
-                                    CoroutineScope(Dispatchers.Default).launch {
-                                        try {
-                                            todoRepository.deleteTodo(todo)
-                                        } catch (e: Exception) {
-                                            val message = when (e) {
-                                                is IOException -> "Unable to connect to Server"
-                                                else -> e.message ?: "Unable to Delete Todo"
-                                            }
-                                            snackBar.showSnackbar(message)
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        val success = todoRepository.deleteTodo(todo)
+
+                                        success.onFailure { error ->
+                                            snackBar.showSnackbar(
+                                                error.message ?: "Something wrong happened"
+                                            )
                                             return@launch
                                         }
 
-                                        viewModel.syncTodos()
+                                        syncTodos()
 
-                                        withContext(Dispatchers.Main) {
-                                            val message =
-                                                "Task \"${todo.title}\"task has been deleted"
-                                            snackBar.showSnackbar(
-                                                message,
-                                                duration = SnackbarDuration.Short
-                                            )
-                                        }
+                                        // TODO: Add button to undo deleted task by clicking trailing icon
+                                        snackBar.showSnackbar(
+                                            "Task \"${todo.title}\"task has been deleted",
+                                            duration = SnackbarDuration.Short
+                                        )
                                     }
                                 })
                         }
@@ -330,17 +327,26 @@ fun TodoListView(
             },
             onAddNewTodo = { todo ->
                 CoroutineScope(Dispatchers.Default).async {
-                    val createdTodo = try {
-                        todoRepository.addTodo(todo)
-                    } catch (e: Exception) {
-                        val message = when (e) {
-                            is IOException -> "Unable to connect to Server"
-                            else -> e.message ?: "Unable to add task"
-                        }
-                        snackBar.showSnackbar(message)
+                    val result = todoRepository.addTodo(todo)
+
+                    result.onFailure { error ->
+                        snackBar.showSnackbar(
+                            error.message ?: "Something wrong happened"
+                        )
                         return@async false
                     }
-                    viewModel.syncTodos()
+
+                    val createdTodo: Todo = result.getOrThrow()
+
+                    launch {
+                        snackBar.showSnackbar(
+                            "Task \"${createdTodo.title}\"task has been Added",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+
+                    launch { syncTodos() }
+
                     return@async true
                 }.await()
             }
@@ -352,13 +358,20 @@ class MockRepository: TodoRepository {
     private val todos = mutableListOf<Todo>()
     override suspend fun fetchAll(): Result<List<Todo>> = Result.success(todos)
 
-    override suspend fun deleteTodo(todo: Todo) {
+    override suspend fun deleteTodo(todo: Todo): Result<Unit> {
         todos.remove(todo)
+        return Result.success(Unit)
     }
 
-    override suspend fun addTodo(todo: Todo): Todo {
-        todos.add(todo)
-        return todos.find { it.id == todo.id }!!
+    override suspend fun addTodo(todo: NewTodo): Result<Todo>{
+        todos.add(
+            Todo(
+                id = UUID.randomUUID().toString().slice(IntRange(0, 6)),
+                title = todo.title,
+                note = todo.note
+            )
+        )
+        return Result.success(todos.last())
     }
 }
 @Preview
@@ -368,8 +381,8 @@ fun TodoListPreview() {
     PersonalDashboardTheme {
         val repo = MockRepository()
         runBlocking {
-            repo.addTodo(Todo("1", "LMAO", "Notes"))
-            repo.addTodo(Todo("2", "LMAO", null))
+            repo.addTodo(NewTodo("LMAO", "Notes"))
+            repo.addTodo(NewTodo("LMAO", null))
         }
         TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = repo)
     }
