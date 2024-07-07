@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.remember
 import chawza.personal.personaldashboard.core.USER_ID
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
@@ -27,7 +28,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PersonalDashboardTheme {
-                TodoListView(todoRepository = TodoPocketBaseRepository(userToken!!))
+                TodoListView(todoRepository = remember { TodoPocketBaseRepository(userToken!!) })
             }
         }
     }
