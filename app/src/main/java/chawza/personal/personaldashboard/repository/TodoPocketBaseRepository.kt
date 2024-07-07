@@ -5,10 +5,8 @@ import chawza.personal.personaldashboard.view.NewTodo
 import chawza.personal.personaldashboard.view.Todo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -56,7 +54,6 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
         }
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     override suspend fun addTodo(todo: NewTodo): Result<Todo> = withContext(Dispatchers.IO) {
         val client = OkHttpClient()
         val url = API.basicUrl()
@@ -89,8 +86,8 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
             return@withContext Result.failure(Exception(response.message))
         }
 
-        val stream = response.body!!.byteStream()
-        val createdTodo = jsonEncoder.decodeFromStream<Todo>(stream)
+        val stream = response.body!!.string()
+        val createdTodo = jsonEncoder.decodeFromString<Todo>(stream)
 
         response.close()
         Result.success(createdTodo)

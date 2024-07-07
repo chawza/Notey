@@ -98,7 +98,9 @@ fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit, requestRefresh
             Text(
                 text = "My Todos",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(16.dp).clickable { requestRefresh() }
+                modifier = Modifier
+                    .padding(16.dp)
+                    .clickable { requestRefresh() }
             )
             if (isLoading) {
                 CircularProgressIndicator()
@@ -225,10 +227,10 @@ fun TodoListView(
 ) {
     val context = LocalContext.current
     val todos = viewModel.todos.collectAsState()
-    val snackBar = SnackbarHostState()
+    val snackBar = remember { SnackbarHostState() }
+
     val showAddTodoModal = remember { mutableStateOf(false) }
     val isSyncing = remember { mutableStateOf(false) }
-
     val isLoading = remember { derivedStateOf { isSyncing.value } }
 
     fun syncTodos() {
@@ -324,7 +326,9 @@ fun TodoListView(
                 }
             }
             if (todos.value.isEmpty()) {
-                Text(text = "No Todos")
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = "No Todos")
+                }
             }
         }
     }
@@ -349,6 +353,7 @@ fun TodoListView(
                     }
 
                     val createdTodo: Todo = result.getOrThrow()
+                    showAddTodoModal.value = false
 
                     launch {
                         snackBar.showSnackbar(
@@ -358,8 +363,6 @@ fun TodoListView(
                     }
 
                     syncTodos()
-
-                    showAddTodoModal.value = false
                 }
             }
         )
