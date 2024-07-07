@@ -1,8 +1,6 @@
 package chawza.personal.personaldashboard.repository
 
 import chawza.personal.personaldashboard.core.API
-import chawza.personal.personaldashboard.view.NewTodo
-import chawza.personal.personaldashboard.view.Todo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString

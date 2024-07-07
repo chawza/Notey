@@ -1,7 +1,7 @@
 package chawza.personal.personaldashboard.model
 
 import androidx.lifecycle.ViewModel
-import chawza.personal.personaldashboard.view.Todo
+import chawza.personal.personaldashboard.repository.Todo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update

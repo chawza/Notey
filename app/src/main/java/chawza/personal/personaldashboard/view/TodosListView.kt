@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -57,6 +58,8 @@ import chawza.personal.personaldashboard.core.USER_ID
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
+import chawza.personal.personaldashboard.repository.NewTodo
+import chawza.personal.personaldashboard.repository.Todo
 import chawza.personal.personaldashboard.repository.TodoRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
@@ -64,27 +67,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import java.util.UUID
 
-@Serializable
-data class NewTodo(
-    @SerialName("user_id")
-    var userId: String,
-    val title: String,
-    val note: String? = null,
-)
-
-@Serializable
-data class Todo(
-    val id: String,
-    val title: String,
-    val note: String? = null,
-//    @SerialName("target_date")
-//    val targetDate: String? = null,
-//    val created: String? = null,
-)
 
 @Composable
 fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit, requestRefresh: () -> Unit) {
@@ -102,16 +86,16 @@ fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit, requestRefresh
                     .padding(16.dp)
                     .clickable { requestRefresh() }
             )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {  // right area
             if (isLoading) {
                 CircularProgressIndicator()
             }
-        }
-        Row {  // right area
             Box {
                 IconButton(
                     onClick = { showMenu.value = true }
                 ) {
-                    Icon(Icons.Filled.AccountCircle, contentDescription = "Users")
+                    Icon(Icons.Filled.AccountCircle, contentDescription = "Users", modifier = Modifier.size(60.dp))
                 }
                 AccountMenu(showMenu.value, dismiss = {showMenu.value = false}, requestLogout=requestLogout)
             }
