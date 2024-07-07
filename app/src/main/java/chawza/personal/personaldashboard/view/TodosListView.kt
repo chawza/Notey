@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.datastore.preferences.core.edit
+import androidx.lifecycle.viewModelScope
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
@@ -225,15 +226,26 @@ fun TodoListView(
     val showAddTodoModal = remember { mutableStateOf(false) }
     val isSyncing = remember { mutableStateOf(false) }
 
-    val isLoading = isSyncing.value
+    val isLoading = remember { derivedStateOf { isSyncing.value } }
+
+    suspend fun syncTodos() {
+        isSyncing.value = true
+        val fetchedResult = todoRepository.fetchAll()
+        fetchedResult
+            .onSuccess { todos ->
+                viewModel.setTodos(todos)
+            }
+            .onFailure { error ->
+                CoroutineScope(Dispatchers.Main).launch {
+                    snackBar.showSnackbar(error.message ?: "Something went wrong")
+                }
+            }
+        isSyncing.value = false
+    }
 
 
     LaunchedEffect(true) {
-        launch {
-            isSyncing.value = true
-            viewModel.syncTodos()
-            isSyncing.value = false
-        }
+        viewModel.viewModelScope.launch { syncTodos() }
     }
 
     Scaffold(
@@ -245,7 +257,7 @@ fun TodoListView(
         },
         topBar = {
             TopBar(
-                isLoading,
+                isLoading.value,
                 requestLogout = {
                     CoroutineScope(Dispatchers.Main).launch {
                         context.userStore.edit { data ->
