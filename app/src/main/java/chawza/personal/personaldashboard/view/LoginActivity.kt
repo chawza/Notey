@@ -35,21 +35,34 @@ import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import chawza.personal.personaldashboard.MainActivity
 import chawza.personal.personaldashboard.core.API
+import chawza.personal.personaldashboard.core.USER_EMAIL
+import chawza.personal.personaldashboard.core.USER_ID
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.view.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+
+@Serializable
+data class LoginRecordObject(
+    val id: String,
+    val email: String
+)
+
+@Serializable
+data class LoginResponseObject(
+    val token: String,
+    val record: LoginRecordObject
+)
 
 class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,7 +86,7 @@ fun LoginView() {
     val password = remember { mutableStateOf("") }
     val isLoggingIn = remember { mutableStateOf(false) }
 
-    suspend fun login(email: String, password: String): Result<String> {
+    suspend fun login(email: String, password: String): Result<LoginResponseObject> {
         val url = API.basicUrl()
             .addPathSegments(API.AUTH_LOGIN)
             .build()
@@ -94,8 +107,13 @@ fun LoginView() {
             }
 
             if (response.isSuccessful) {
-                val responseJSON = JSONObject(response.body!!.string())
-                return Result.success(responseJSON.getString("token"))
+                val stream = response.body!!.string()
+                response.close()
+
+                val encoder = Json { ignoreUnknownKeys = true }
+                return Result.success(
+                    encoder.decodeFromString<LoginResponseObject>(stream)
+                )
             }
             else if (response.code in 400..499 && response.body != null) {
                 val jsonResponse = JSONObject(response.body!!.string())
@@ -137,11 +155,13 @@ fun LoginView() {
                         isLoggingIn.value = true
                         CoroutineScope(Dispatchers.Main).launch {
                             val result = login(email.value, password.value)
-                            result.onSuccess { token ->
+                            result.onSuccess { response ->
                                 context.userStore.edit { data ->
-                                    data[USER_TOKEN_KEY] = token
-                                    context.startActivity(Intent(context, MainActivity::class.java))
+                                    data[USER_TOKEN_KEY] = response.token
+                                    data[USER_ID] = response.record.id
+                                    data[USER_EMAIL] = response.record.email
                                 }
+                                context.startActivity(Intent(context, MainActivity::class.java))
                             }
                             .onFailure { error ->
                                 snackBar.showSnackbar(error.message ?: "Something went wrong")

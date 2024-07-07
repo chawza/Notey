@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,6 +53,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.viewModelScope
+import chawza.personal.personaldashboard.core.USER_ID
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.model.TodoListVIewModel
@@ -61,21 +61,24 @@ import chawza.personal.personaldashboard.repository.TodoRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Serializable
 data class NewTodo(
+    @SerialName("user_id")
+    var userId: String,
     val title: String,
     val note: String? = null,
 )
 
 @Serializable
 data class Todo(
-    val id: String? = null,
+    val id: String,
     val title: String,
     val note: String? = null,
 //    @SerialName("target_date")
@@ -84,7 +87,7 @@ data class Todo(
 )
 
 @Composable
-fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit) {
+fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit, requestRefresh: () -> Unit) {
     val showMenu = remember { mutableStateOf(false) }
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -95,7 +98,7 @@ fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit) {
             Text(
                 text = "My Todos",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(16.dp).clickable { requestRefresh() }
             )
             if (isLoading) {
                 CircularProgressIndicator()
@@ -130,7 +133,7 @@ fun AccountMenu(show: Boolean = false, dismiss: () -> Unit, requestLogout: () ->
 fun PreviewTopBar() {
     PersonalDashboardTheme {
         Surface(modifier = Modifier.width(400.dp)) {
-            TopBar(false, { })
+            TopBar(false, { }, {})
         }
     }
 }
@@ -145,7 +148,7 @@ fun AddButton(onCLick: () -> Unit) {
 fun AddTodoModal(
     modifier: Modifier = Modifier,
     dismiss: () -> Unit,
-    onAddNewTodo: suspend (NewTodo) -> Boolean,
+    onAddNewTodo: suspend (NewTodo) -> Unit,
 ) {
     var isLoading by remember { mutableStateOf(false) }
     val closable by remember { derivedStateOf { !isLoading } }
@@ -190,14 +193,12 @@ fun AddTodoModal(
                         .fillMaxWidth()
                         .height(56.dp),
                     onClick = {
-                        val newTodo = NewTodo(title = title, note = note.ifEmpty { null })
+                        val newTodo = NewTodo(userId = "", title = title, note = note.ifEmpty { null })
                         isLoading = true
 
                         CoroutineScope(Dispatchers.Main).launch {
                             try {
-                                val success = onAddNewTodo(newTodo)
-                                if (success)
-                                    dismiss()
+                                onAddNewTodo(newTodo)
                             } finally {
                                 isLoading = false
                             }
@@ -230,32 +231,36 @@ fun TodoListView(
 
     val isLoading = remember { derivedStateOf { isSyncing.value } }
 
-    suspend fun syncTodos() {
-        isSyncing.value = true
-        val fetchedResult = todoRepository.fetchAll()
-        fetchedResult
-            .onSuccess { todos ->
-                viewModel.setTodos(todos)
-            }
-            .onFailure { error ->
-                CoroutineScope(Dispatchers.Main).launch {
-                    snackBar.showSnackbar(error.message ?: "Something went wrong")
+    fun syncTodos() {
+        viewModel.viewModelScope.launch {
+            isSyncing.value = true
+            val fetchedResult = todoRepository.fetchAll()
+            fetchedResult
+                .onSuccess { todos ->
+                    viewModel.setTodos(todos)
                 }
-            }
-        isSyncing.value = false
+                .onFailure { error ->
+                    CoroutineScope(Dispatchers.Main).launch {
+                        snackBar.showSnackbar(error.message ?: "Something went wrong")
+                    }
+                }
+            isSyncing.value = false
+        }
     }
 
 
     LaunchedEffect(true) {
-        viewModel.viewModelScope.launch { syncTodos() }
+        syncTodos()
     }
 
     Scaffold(
         modifier = modifier,
         floatingActionButton = {
-            AddButton(onCLick = {
-                showAddTodoModal.value = true
-            })
+            AddButton(
+                onCLick = {
+                    showAddTodoModal.value = true
+                }
+            )
         },
         topBar = {
             TopBar(
@@ -267,6 +272,9 @@ fun TodoListView(
                         }
                         context.startActivity(Intent(context, LoginActivity::class.java))
                     }
+                },
+                requestRefresh = {
+                    syncTodos()
                 }
             )
         },
@@ -308,7 +316,8 @@ fun TodoListView(
                                             duration = SnackbarDuration.Short
                                         )
                                     }
-                                })
+                                }
+                            )
                         }
                     )
                     Divider()
@@ -326,14 +335,17 @@ fun TodoListView(
                 showAddTodoModal.value = false
             },
             onAddNewTodo = { todo ->
-                CoroutineScope(Dispatchers.Default).async {
+                CoroutineScope(Dispatchers.Main).launch {
+                    todo.userId = context.userStore.data.first()[USER_ID]!!
                     val result = todoRepository.addTodo(todo)
 
                     result.onFailure { error ->
-                        snackBar.showSnackbar(
-                            error.message ?: "Something wrong happened"
-                        )
-                        return@async false
+                        launch {
+                            snackBar.showSnackbar(
+                                error.message ?: "Something wrong happened"
+                            )
+                        }
+                        return@launch
                     }
 
                     val createdTodo: Todo = result.getOrThrow()
@@ -345,10 +357,10 @@ fun TodoListView(
                         )
                     }
 
-                    launch { syncTodos() }
+                    syncTodos()
 
-                    return@async true
-                }.await()
+                    showAddTodoModal.value = false
+                }
             }
         )
     }
@@ -381,8 +393,8 @@ fun TodoListPreview() {
     PersonalDashboardTheme {
         val repo = MockRepository()
         runBlocking {
-            repo.addTodo(NewTodo("LMAO", "Notes"))
-            repo.addTodo(NewTodo("LMAO", null))
+            repo.addTodo(NewTodo("", "LMAO", "Notes"))
+            repo.addTodo(NewTodo("", "LMAO", null))
         }
         TodoListView(modifier = Modifier.fillMaxSize(), todoRepository = repo)
     }

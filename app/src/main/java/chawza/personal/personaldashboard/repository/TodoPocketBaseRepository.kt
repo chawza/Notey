@@ -90,9 +90,9 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
         }
 
         val stream = response.body!!.byteStream()
-        response.close()
-
         val createdTodo = jsonEncoder.decodeFromStream<Todo>(stream)
+
+        response.close()
         Result.success(createdTodo)
     }
 
@@ -100,6 +100,7 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
         val client = OkHttpClient()
         val url = API.basicUrl()
             .addPathSegments(API.TODO_ENDPOINT)
+            .addPathSegment(todo.id)
             .build()
 
         val request = Request.Builder()

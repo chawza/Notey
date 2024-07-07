@@ -4,11 +4,9 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.SnackbarHostState
+import chawza.personal.personaldashboard.core.USER_ID
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
-import chawza.personal.personaldashboard.model.TodoListVIewModel
-import chawza.personal.personaldashboard.repository.TodoAPIRepository
 import chawza.personal.personaldashboard.repository.TodoPocketBaseRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import chawza.personal.personaldashboard.view.LoginActivity
@@ -20,15 +18,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val userToken = runBlocking { this@MainActivity.userStore.data.first()[USER_TOKEN_KEY] }
+        val userDbID = runBlocking { this@MainActivity.userStore.data.first()[USER_ID] }
 
-        if (userToken == null) {
+        if (userToken == null || userDbID == null) {
             startActivity(Intent(this@MainActivity, LoginActivity::class.java))
-            return
+            finish()
         }
 
         setContent {
             PersonalDashboardTheme {
-                TodoListView(todoRepository = TodoPocketBaseRepository(userToken))
+                TodoListView(todoRepository = TodoPocketBaseRepository(userToken!!))
             }
         }
     }

@@ -24,7 +24,6 @@ fun Response.raiseStatus(message: String? = null) {
 interface TodoRepository {
     suspend fun fetchAll(): Result<List<Todo>>
     suspend fun deleteTodo(todo: Todo): Result<Unit>
-
     suspend fun addTodo(todo: NewTodo):  Result<Todo>
 }
 
