@@ -13,7 +13,7 @@ import org.json.JSONObject
 import java.io.IOException
 
 class TodoPocketBaseRepository(private val token: String): TodoRepository {
-    private val jsonEncoder = Json { ignoreUnknownKeys = true }
+    private val todoJsonEncoder = Json { ignoreUnknownKeys = true }
 
     override suspend fun fetchAll(): Result<List<Todo>> = withContext(Dispatchers.IO) {
         val client = OkHttpClient()
@@ -45,7 +45,7 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
             val todos: MutableList<Todo> = mutableListOf()
 
             for (idx in 0..< recordList.length()) {
-                todos.add(jsonEncoder.decodeFromString<Todo>(recordList.getJSONObject(idx).toString()))
+                todos.add(todoJsonEncoder.decodeFromString<Todo>(recordList.getJSONObject(idx).toString()))
             }
 
             Result.success(todos)
@@ -58,7 +58,7 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
             .addPathSegments(API.TODO_ENDPOINT)
             .build()
 
-        val requestBody = jsonEncoder
+        val requestBody = todoJsonEncoder
             .encodeToString(todo)
             .toRequestBody(
                 "application/json".toMediaType()
@@ -85,7 +85,7 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
         }
 
         val stream = response.body!!.string()
-        val createdTodo = jsonEncoder.decodeFromString<Todo>(stream)
+        val createdTodo = todoJsonEncoder.decodeFromString<Todo>(stream)
 
         response.close()
         Result.success(createdTodo)
@@ -119,5 +119,47 @@ class TodoPocketBaseRepository(private val token: String): TodoRepository {
         }
 
         Result.success(Unit)
+    }
+
+    override suspend fun update(todo: Todo): Result<Todo> = withContext(Dispatchers.IO) {
+        val client = OkHttpClient()
+        val url = API.basicUrl()
+            .addPathSegments(API.TODO_ENDPOINT)
+            .addPathSegment(todo.id)
+            .build()
+
+        val data = UpdateTodo(title = todo.title, note = todo.note)
+
+        val requestBody = todoJsonEncoder
+            .encodeToString(data)
+            .toRequestBody(
+                "application/json".toMediaType()
+            )
+
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", token)
+            .patch(requestBody)
+            .build()
+
+        val response = try {
+            client.newCall(request).execute()
+        } catch (e: IOException) {
+            return@withContext Result.failure(Exception("Unable to connect to server"))
+        }
+
+        if (!response.isSuccessful) {
+            if (response.code in 400..499) {
+                val responseJson = JSONObject(response.body!!.string())
+                return@withContext Result.failure(Exception(responseJson.getString("message")))
+            }
+            return@withContext Result.failure(Exception(response.message))
+        }
+
+        val stream = response.body!!.string()
+        val updatedTodo = todoJsonEncoder.decodeFromString<Todo>(stream)
+        response.close()
+
+        Result.success(updatedTodo)
     }
 }

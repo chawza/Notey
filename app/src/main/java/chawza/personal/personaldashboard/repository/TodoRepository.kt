@@ -1,18 +1,7 @@
 package chawza.personal.personaldashboard.repository
 
-import chawza.personal.personaldashboard.core.API
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 fun Response.raiseStatus(message: String? = null) {
@@ -39,9 +28,16 @@ data class Todo(
 //    val created: String? = null,
 )
 
+@Serializable
+data class UpdateTodo(
+    val title: String,
+    val note: String? = null,
+)
+
 
 interface TodoRepository {
     suspend fun fetchAll(): Result<List<Todo>>
     suspend fun deleteTodo(todo: Todo): Result<Unit>
     suspend fun addTodo(todo: NewTodo):  Result<Todo>
+    suspend fun update(todo: Todo): Result<Todo>
 }

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,10 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -65,7 +62,6 @@ import chawza.personal.personaldashboard.repository.TodoRepository
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -222,6 +218,32 @@ fun TodoListView(
         }
     }
 
+    suspend fun handleUpdateTodo(todo: Todo) {
+        withContext(Dispatchers.Main) {
+            isUpdating.value = true
+            val result = todoRepository.update(todo)
+            result.onFailure { error ->
+                launch {
+                    snackBar.showSnackbar(
+                        error.message ?: "Something wrong happened"
+                    )
+                }
+                return@withContext
+            }
+
+            val updatedTodo: Todo = result.getOrThrow()
+            isUpdating.value = false
+
+            launch {
+                snackBar.showSnackbar(
+                    "Task \"${updatedTodo.title}\" task has been Updated",
+                    duration = SnackbarDuration.Short
+                )
+            }
+            syncTodos()
+        }
+    }
+
     Scaffold(
         modifier = modifier,
         floatingActionButton = {
@@ -325,13 +347,7 @@ fun TodoListView(
                                 .fillMaxHeight()
                                 .fillMaxWidth(1f),
                             initial = selectedTodo.value,
-                            onUpdateRequest = {
-                                withContext(Dispatchers.Main) {
-                                    isUpdating.value = true
-                                    delay(2000)
-                                    isUpdating.value = false
-                                }
-                            },
+                            onUpdateRequest = { todo: Todo -> handleUpdateTodo(todo) },
                             onAddRequest = { }
                         )
                     }
@@ -372,6 +388,15 @@ class MockRepository: TodoRepository {
             )
         )
         return Result.success(todos.last())
+    }
+
+    override suspend fun update(todo: Todo): Result<Todo> {
+        val todo2 = todos.find { item -> item.id == todo.id }
+        todo2?.let {
+            todos.remove(todo2)
+        }
+        todos.add(todo)
+        return Result.success(todo)
     }
 }
 @Preview
