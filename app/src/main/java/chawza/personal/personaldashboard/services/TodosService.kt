@@ -1,15 +1,12 @@
 package chawza.personal.personaldashboard.services
 
-import android.util.Log
 import chawza.personal.personaldashboard.core.API
 import chawza.personal.personaldashboard.repository.NewTodo
 import chawza.personal.personaldashboard.repository.Todo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -42,7 +39,6 @@ class TodosService(private val token: String) {
         return@withContext Result.success(todos)
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     suspend fun create(todo: NewTodo): Result<Todo> = withContext(Dispatchers.IO) {
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)
@@ -59,7 +55,7 @@ class TodosService(private val token: String) {
             return@withContext Result.failure(Exception("Task not created"))
         }
 
-        val newTodo = encoder.decodeFromStream<Todo>(response.body!!.byteStream())
+        val newTodo = encoder.decodeFromString<Todo>(response.body!!.string())
         response.close()
         return@withContext Result.success(newTodo)
     }
