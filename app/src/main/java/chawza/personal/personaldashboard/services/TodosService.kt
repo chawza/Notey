@@ -67,6 +67,7 @@ class TodosService(private val token: String) {
     suspend fun update(todo: Todo): Result<Todo> = withContext(Dispatchers.IO) {
         val url = API.basicUrl()
             .addPathSegments(API.TODO_LIST_VIEWSET)
+            .addPathSegments("${todo.id}/")
             .build()
 
         val request = Request.Builder()

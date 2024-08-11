@@ -2,14 +2,11 @@ package chawza.personal.personaldashboard
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.registerForActivityResult
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.rounded.Add
@@ -43,7 +39,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.currentRecomposeScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -51,22 +46,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.OnLifecycleEvent
-import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import chawza.personal.personaldashboard.view.LoginActivity
 import chawza.personal.personaldashboard.model.TodoListVIewModel
+import chawza.personal.personaldashboard.repository.Todo
 import chawza.personal.personaldashboard.services.TodosService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 
 @Composable
@@ -161,11 +153,36 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            fun handleDeleteTask(todo: Todo) {
+                viewModel.viewModelScope.launch {
+                    val result = todoService.delete(todo.id)
+
+                    result
+                        .onFailure { error ->
+                            snackBar.showSnackbar(
+                                error.message ?: "Something wrong happened"
+                            )
+                            return@launch
+                        }
+                        .onSuccess {
+                            // TODO: Add button to undo deleted task by clicking trailing icon
+                            launch {
+                                snackBar.showSnackbar(
+                                    "Task \"${todo.title}\" task has been deleted",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+
+                            syncTodos()
+                        }
+                }
+            }
+
             LaunchedEffect(Unit) {
                 syncTodos()
             }
 
-            val editTaskContract = rememberLauncherForActivityResult(
+            val editTaskLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartActivityForResult()
             ) {
                 if (it.resultCode == RESULT_OK && it.data != null && it.data!!.hasExtra("message")) {
@@ -184,7 +201,7 @@ class MainActivity : ComponentActivity() {
                     floatingActionButton = {
                         AddButton(
                             onClick = {
-                                editTaskContract.launch(Intent(this, EditTaskActivity::class.java))
+                                editTaskLauncher.launch(Intent(this, EditTaskActivity::class.java))
                             }
                         )
                     },
@@ -221,6 +238,11 @@ class MainActivity : ComponentActivity() {
                                     val todo = todos.value[idx]
 
                                     ListItem(
+                                        modifier = Modifier.clickable {
+                                            val intent = Intent(this@MainActivity, EditTaskActivity::class.java)
+                                            intent.putExtra("todo", Json.encodeToString(todo))
+                                            editTaskLauncher.launch(intent)
+                                        },
                                         headlineContent = { Text(text = todo.title) },
                                         trailingContent = {
                                             Icon(
@@ -228,28 +250,7 @@ class MainActivity : ComponentActivity() {
                                                 contentDescription = "Delete Todo",
                                                 tint = Color.Red,
                                                 modifier = Modifier.clickable {
-                                                    viewModel.viewModelScope.launch {
-                                                        val result = todoService.delete(todo.id)
-
-                                                        result
-                                                            .onFailure { error ->
-                                                                snackBar.showSnackbar(
-                                                                    error.message ?: "Something wrong happened"
-                                                                )
-                                                                return@launch
-                                                            }
-                                                            .onSuccess {
-                                                                // TODO: Add button to undo deleted task by clicking trailing icon
-                                                                launch {
-                                                                    snackBar.showSnackbar(
-                                                                        "Task \"${todo.title}\" task has been deleted",
-                                                                        duration = SnackbarDuration.Short
-                                                                    )
-                                                                }
-
-                                                                syncTodos()
-                                                            }
-                                                    }
+                                                    handleDeleteTask(todo)
                                                 }
                                             )
                                         }

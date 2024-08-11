@@ -6,13 +6,19 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -21,6 +27,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,19 +35,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import chawza.personal.personaldashboard.core.USER_TOKEN_KEY
 import chawza.personal.personaldashboard.core.userStore
 import chawza.personal.personaldashboard.repository.NewTodo
+import chawza.personal.personaldashboard.repository.Todo
 import chawza.personal.personaldashboard.services.TodosService
 import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
-class TodoFormViewModel: ViewModel() {
+class TodoFormViewModel : ViewModel() {
     private val _title = MutableStateFlow("")
     val title = _title.asStateFlow()
 
@@ -55,10 +66,20 @@ class TodoFormViewModel: ViewModel() {
         _note.value = value
     }
 }
-class EditTaskActivity: ComponentActivity() {
+
+class EditTaskActivity : ComponentActivity() {
+    private var updateTodo: Todo? = null
+    private lateinit var userToken: String
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        if (this.intent.hasExtra("todo")) {
+            updateTodo = Json.decodeFromString<Todo>(this.intent.getStringExtra("todo")!!)
+        }
+
+        val isUpdate = updateTodo != null
 
         setContent {
             val model = remember { TodoFormViewModel() }
@@ -67,10 +88,82 @@ class EditTaskActivity: ComponentActivity() {
 
             val title by model.title.collectAsState()
             val note by model.note.collectAsState()
-            
+
+            LaunchedEffect(Unit) {
+                launch {
+                    this@EditTaskActivity.userStore.data.collect { data ->
+                        userToken = data[USER_TOKEN_KEY]!!
+                    }
+                }
+
+                if (isUpdate) {
+                    model.setTitle(updateTodo!!.title)
+                    model.setNote(updateTodo!!.notes ?: "")
+                }
+            }
+
+            fun handleCreate() {
+                model.viewModelScope.launch {
+                    isLoading = true
+
+                    val service = TodosService(userToken)
+                    service.create(NewTodo(title, note))
+                        .onFailure { error ->
+                            launch {
+                                snackBar.showSnackbar(
+                                    error.message ?: "Failed to create new task",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                            isLoading = false
+                        }
+                        .onSuccess {
+                            isLoading = false
+                            this@EditTaskActivity.intent.putExtra("message", "Task created!")
+                            this@EditTaskActivity.setResult(RESULT_OK)
+                            this@EditTaskActivity.finish()
+                        }
+                }
+            }
+
+            fun handleUpdate() {
+                model.viewModelScope.launch {
+                    isLoading = true
+
+                    val currTitle = model.title.value
+                    val currNote = model.note.value
+
+                    if (currTitle.isEmpty()) {
+                        async {
+                            snackBar.showSnackbar("Title must be filled")
+                        }.await()
+
+                        return@launch
+                    }
+
+                    val service = TodosService(userToken)
+                    val updated = updateTodo!!.copy(title = currTitle, notes = currNote)
+
+                    service.update(updated)
+                        .onFailure { error ->
+                            launch {
+                                snackBar.showSnackbar(
+                                    error.message ?: "Failed to update task",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                            isLoading = false
+                        }
+                        .onSuccess {
+                            isLoading = false
+                            snackBar.showSnackbar("Task updated!")
+                        }
+                }
+            }
+
             PersonalDashboardTheme {
                 Scaffold(
-                    snackbarHost = { SnackbarHost(hostState = snackBar)}
+                    snackbarHost = { SnackbarHost(hostState = snackBar) }
                 ) { paddingValues ->
                     Surface(
                         modifier = Modifier.padding(paddingValues),
@@ -81,8 +174,15 @@ class EditTaskActivity: ComponentActivity() {
                                 .padding(20.dp),
                             verticalArrangement = Arrangement.spacedBy(20.dp)
                         ) {
-                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = "New Task", style = MaterialTheme.typography.titleMedium)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = if (isUpdate) "Update Task" else "New Task",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
                                 if (isLoading) {
                                     CircularProgressIndicator()
                                 }
@@ -102,41 +202,45 @@ class EditTaskActivity: ComponentActivity() {
                                 onValueChange = { model.setNote(it) },
                                 label = { Text(text = "Note") }
                             )
-                            Button(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                onClick = {
-                                    model.viewModelScope.launch {
-                                        isLoading = true
-
-                                        this@EditTaskActivity.userStore.data.collect { data ->
-                                            val token = data[USER_TOKEN_KEY]!!
-                                            val service = TodosService(token)
-
-                                            service.create(NewTodo(title, note))
-                                                .onFailure { error ->
-                                                    launch {
-                                                        snackBar.showSnackbar(
-                                                            error.message ?: "Failed to create new task",
-                                                            duration  = SnackbarDuration.Short
-                                                        )
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Button(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp),
+                                    onClick = { if (isUpdate) handleUpdate() else handleCreate() },
+                                    enabled = !isLoading,
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(text = if (isUpdate) "Update" else "Create")
+                                }
+                                if (isUpdate) {
+                                    Button(
+                                        onClick = {
+                                            model.viewModelScope.launch {
+                                                TodosService(userToken).delete(updateTodo!!.id)
+                                                    .onFailure {
+                                                        launch {
+                                                            snackBar.showSnackbar("Failed to Delete task")
+                                                        }
                                                     }
-                                                    isLoading = false
-                                                }
-                                                .onSuccess {
-                                                    isLoading = false
-                                                    this@EditTaskActivity.intent.putExtra("message", "Task created!")
-                                                    this@EditTaskActivity.setResult(RESULT_OK)
-                                                    this@EditTaskActivity.finish()
-                                                }
-                                        }
+                                                    .onSuccess {
+                                                        this@EditTaskActivity.finish()
+                                                    }
+                                            }
+                                        },
+                                        modifier = Modifier.size(56.dp),
+                                        shape = MaterialTheme.shapes.small,
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                        contentPadding = PaddingValues(10.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Delete,
+                                            contentDescription = "delete task",
+                                            tint = Color.White,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
                                     }
-                                },
-                                enabled = !isLoading,
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Text(text = "Create")
+                                }
                             }
                         }
                     }

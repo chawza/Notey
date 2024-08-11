@@ -1,41 +1,19 @@
 package chawza.personal.personaldashboard.repository
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.Response
-
-fun Response.raiseStatus(message: String? = null) {
-    if (this.code in 400..599) {
-        throw Exception(message?.let { "Request Error [${this.code}]" })
-    }
-}
 
 @Serializable
 data class NewTodo(
     val title: String,
-    val note: String? = null,
+    val notes: String? = null,
 )
 
 @Serializable
 data class Todo(
     val id: Int,
     val title: String,
-    val note: String? = null,
+    val notes: String? = null,
 //    @SerialName("target_date")
 //    val targetDate: String? = null,
 //    val created: String? = null,
 )
-
-@Serializable
-data class UpdateTodo(
-    val title: String,
-    val note: String? = null,
-)
-
-
-interface TodoRepository {
-    suspend fun fetchAll(): Result<List<Todo>>
-    suspend fun deleteTodo(todo: Todo): Result<Unit>
-    suspend fun addTodo(todo: NewTodo):  Result<Todo>
-    suspend fun update(todo: Todo): Result<Todo>
-}
