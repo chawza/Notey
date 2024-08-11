@@ -12,15 +12,13 @@ fun Response.raiseStatus(message: String? = null) {
 
 @Serializable
 data class NewTodo(
-    @SerialName("user_id")
-    var userId: String,
     val title: String,
     val note: String? = null,
 )
 
 @Serializable
 data class Todo(
-    val id: String,
+    val id: Int,
     val title: String,
     val note: String? = null,
 //    @SerialName("target_date")

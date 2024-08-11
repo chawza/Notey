@@ -2,6 +2,7 @@ package chawza.personal.personaldashboard.model
 
 import androidx.lifecycle.ViewModel
 import chawza.personal.personaldashboard.repository.Todo
+import chawza.personal.personaldashboard.services.TodosService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -15,17 +16,9 @@ class TodoListVIewModel: ViewModel() {
         _todos.update { todos }
     }
 
-    private val _selectedTodo = MutableStateFlow<Todo?>(null)
-    val selectedTodo = _selectedTodo.asStateFlow()
-
-    fun selectTodo(todo: Todo) {
-        val found = _todos.value.find { sample -> sample.id == todo.id }
-        found?.let {
-            _selectedTodo.value = todo
+    fun deleteById(id: Int) {
+        _todos.update {
+            it.filter { todo -> todo.id != id}
         }
-    }
-
-    fun unSelectTodo() {
-        _selectedTodo.value = null
     }
 }
