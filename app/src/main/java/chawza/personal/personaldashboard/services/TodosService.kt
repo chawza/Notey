@@ -13,6 +13,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 
+val ConnectionError = Error("Unable to connect to server")
+
 class TodosService(private val token: String) {
     private val encoder = Json { ignoreUnknownKeys = true }
     private val jsonMediaType = "application/json".toMediaType()
@@ -29,7 +31,11 @@ class TodosService(private val token: String) {
             .get()
             .build()
 
-        val response = client.newCall(request).execute()
+        val response = try {
+            client.newCall(request).execute()
+        } catch(error: IOException) {
+            return@withContext Result.failure(ConnectionError)
+        }
 
         if (!response.isSuccessful) {
             return@withContext Result.failure(IOException("Failed to fetch todos"))
@@ -50,7 +56,12 @@ class TodosService(private val token: String) {
             .addHeader("Authorization", "Token $token")
             .build()
 
-        val response = client.newCall(request).execute()
+        val response = try {
+            client.newCall(request).execute()
+        } catch(error: IOException) {
+            return@withContext Result.failure(ConnectionError)
+        }
+
         if (!response.isSuccessful) {
             return@withContext Result.failure(Exception("Task not created"))
         }
@@ -72,7 +83,11 @@ class TodosService(private val token: String) {
             .patch(encoder.encodeToString(todo).toRequestBody(jsonMediaType))
             .build()
 
-        val response = client.newCall(request).execute()
+        val response = try {
+            client.newCall(request).execute()
+        } catch(error: IOException) {
+            return@withContext Result.failure(ConnectionError)
+        }
 
         if (!response.isSuccessful) {
             return@withContext Result.failure(IOException("Failed to update task"))
@@ -95,7 +110,11 @@ class TodosService(private val token: String) {
             .delete()
             .build()
 
-        val response = client.newCall(request).execute()
+        val response = try {
+            client.newCall(request).execute()
+        } catch(error: IOException) {
+            return@withContext Result.failure(ConnectionError)
+        }
 
         if (response.code !in 200..299) {
             return@withContext Result.failure(IOException("Failed to delete task"))
