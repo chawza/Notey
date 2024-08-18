@@ -191,7 +191,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val snackBar = remember { SnackbarHostState() }
-            val isLoading = remember { derivedStateOf { viewModel.isSyncing.value }}
+            val isLoading = remember { derivedStateOf { viewModel.isSyncing.value } }
             val todos = viewModel.todos.collectAsState()
 
             LaunchedEffect(Unit) {

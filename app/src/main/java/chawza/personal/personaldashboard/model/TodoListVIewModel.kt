@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 
-class TodoListVIewModel(private val todoService: TodosService): ViewModel() {
+class TodoListVIewModel(private val todoService: TodosService) : ViewModel() {
     val isSyncing = MutableStateFlow(false)
     private val snackBar = SnackbarHostState()
 

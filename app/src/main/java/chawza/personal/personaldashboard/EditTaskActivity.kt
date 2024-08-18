@@ -189,7 +189,9 @@ class EditTaskActivity : ComponentActivity() {
                                     CircularProgressIndicator()
                                 }
                                 if (isUpdate) {
-                                    Checkbox(checked = updateTodo!!.done != null, onCheckedChange = {})
+                                    Checkbox(
+                                        checked = updateTodo!!.done != null,
+                                        onCheckedChange = {})
                                 }
                             }
                             OutlinedTextField(
