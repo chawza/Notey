@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -190,33 +191,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val snackBar = remember { SnackbarHostState() }
-            val isLoading = remember { mutableStateOf(false) }
+            val isLoading = remember { derivedStateOf { viewModel.isSyncing.value }}
             val todos = viewModel.todos.collectAsState()
-
-            fun handleDeleteTask(todo: Todo) {
-                viewModel.viewModelScope.launch {
-                    val result = todoService.delete(todo.id)
-
-                    result
-                        .onFailure { error ->
-                            snackBar.showSnackbar(
-                                error.message ?: "Something wrong happened"
-                            )
-                            return@launch
-                        }
-                        .onSuccess {
-                            // TODO: Add button to undo deleted task by clicking trailing icon
-                            launch {
-                                snackBar.showSnackbar(
-                                    "Task \"${todo.title}\" task has been deleted",
-                                    duration = SnackbarDuration.Short
-                                )
-                            }
-
-                            viewModel.syncTodos()
-                        }
-                }
-            }
 
             LaunchedEffect(Unit) {
                 viewModel.syncTodos()
@@ -287,7 +263,7 @@ class MainActivity : ComponentActivity() {
                                             intent.putExtra("todo", Json.encodeToString(todo))
                                             editTaskLauncher.launch(intent)
                                         }, onDeleteRequest = {
-                                            handleDeleteTask(todo)
+                                            viewModel.handleDeleteTask(todo)
                                         }, onCheckBoxClick = { checked ->
 
                                         }

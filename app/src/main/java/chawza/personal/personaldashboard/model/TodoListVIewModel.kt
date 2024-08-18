@@ -1,5 +1,6 @@
 package chawza.personal.personaldashboard.model
 
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,7 +13,7 @@ import kotlinx.coroutines.launch
 
 
 class TodoListVIewModel(private val todoService: TodosService): ViewModel() {
-    private val isSyncing = MutableStateFlow(false)
+    val isSyncing = MutableStateFlow(false)
     private val snackBar = SnackbarHostState()
 
     private val _todos = MutableStateFlow<List<Todo>>(listOf())
@@ -20,12 +21,6 @@ class TodoListVIewModel(private val todoService: TodosService): ViewModel() {
 
     fun setTodos(todos: List<Todo>) {
         _todos.update { todos }
-    }
-
-    fun deleteById(id: Int) {
-        _todos.update {
-            it.filter { todo -> todo.id != id}
-        }
     }
 
     fun syncTodos() {
@@ -42,6 +37,31 @@ class TodoListVIewModel(private val todoService: TodosService): ViewModel() {
                     }
                 }
             isSyncing.value = false
+        }
+    }
+
+    fun handleDeleteTask(todo: Todo) {
+        viewModelScope.launch {
+            val result = todoService.delete(todo.id)
+
+            result
+                .onFailure { error ->
+                    snackBar.showSnackbar(
+                        error.message ?: "Something wrong happened"
+                    )
+                    return@launch
+                }
+                .onSuccess {
+                    // TODO: Add button to undo deleted task by clicking trailing icon
+                    launch {
+                        snackBar.showSnackbar(
+                            "Task \"${todo.title}\" task has been deleted",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+
+                    syncTodos()
+                }
         }
     }
 }
