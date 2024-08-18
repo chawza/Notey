@@ -19,15 +19,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -44,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.viewModelScope
@@ -59,14 +62,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.internal.concurrent.Task
 
 
 @Composable
 fun AddButton(
     onClick: () -> Unit
 ) {
-    IconButton(onClick = onClick, modifier = Modifier) {
-        Icon(Icons.Rounded.Add, contentDescription = "Add button")
+    IconButton(
+        onClick = onClick,
+        colors = IconButtonDefaults.filledIconButtonColors(),
+    ) {
+        Icon(Icons.Filled.Add, contentDescription = "Add button")
+    }
+}
+
+@Composable
+@Preview
+fun AddButtonPreview() {
+    AddButton {
     }
 }
 
@@ -75,9 +89,9 @@ fun AddButton(
 fun AccountMenu(show: Boolean = false, dismiss: () -> Unit, requestLogout: () -> Unit) {
     DropdownMenu(expanded = show, onDismissRequest = dismiss) {
         DropdownMenuItem(
-            text = { Text(text = "Logout", color = Color.Black)},
+            text = { Text(text = "Logout", color = Color.Black) },
             onClick = requestLogout,
-            trailingIcon = {Icons.Filled.ExitToApp}
+            trailingIcon = { Icons.Filled.ExitToApp }
         )
     }
 }
@@ -108,13 +122,58 @@ fun TopBar(isLoading: Boolean = false, requestLogout: () -> Unit, requestRefresh
                 IconButton(
                     onClick = { showMenu.value = true }
                 ) {
-                    Icon(Icons.Filled.AccountCircle, contentDescription = "Users", modifier = Modifier.size(60.dp))
+                    Icon(
+                        Icons.Filled.AccountCircle,
+                        contentDescription = "Users",
+                        modifier = Modifier.size(60.dp)
+                    )
                 }
-                AccountMenu(showMenu.value, dismiss = {showMenu.value = false}, requestLogout=requestLogout)
+                AccountMenu(
+                    showMenu.value,
+                    dismiss = { showMenu.value = false },
+                    requestLogout = requestLogout
+                )
             }
         }
     }
 }
+
+@Composable
+fun TaskListItem(
+    todo: Todo,
+    onClick: () -> Unit,
+    onCheckBoxClick: (Boolean) -> Unit,
+    onDeleteRequest: () -> Unit
+) {
+    ListItem(
+        modifier = Modifier.clickable { onClick() },
+        leadingContent = {
+            Checkbox(
+                checked = todo.done != null,
+                onCheckedChange = onCheckBoxClick
+            )
+        },
+        headlineContent = { Text(text = todo.title) },
+        trailingContent = {
+            Icon(
+                Icons.Filled.Delete,
+                contentDescription = "Delete Todo",
+                tint = Color.Red,
+                modifier = Modifier.clickable { onDeleteRequest() }
+            )
+        }
+    )
+}
+
+@Composable
+@Preview
+fun PreviewTaskListItem() {
+    TaskListItem(
+        todo = Todo(1, "ASDASD", "asdasd"),
+        onClick = { /*TODO*/ },
+        onCheckBoxClick = {}) {}
+}
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -227,40 +286,39 @@ class MainActivity : ComponentActivity() {
                         SnackbarHost(hostState = snackBar)
                     }
                 ) { paddingValues ->
-                    Surface(modifier = Modifier
-                        .padding(paddingValues)
-                        .fillMaxHeight()
-                        .animateContentSize()
+                    Surface(
+                        modifier = Modifier
+                            .padding(paddingValues)
+                            .fillMaxHeight()
+                            .animateContentSize()
                     ) {
                         if (todos.value.isNotEmpty()) {
                             LazyColumn {
                                 items(todos.value.size) { idx ->
                                     val todo = todos.value[idx]
-
-                                    ListItem(
-                                        modifier = Modifier.clickable {
-                                            val intent = Intent(this@MainActivity, EditTaskActivity::class.java)
+                                    TaskListItem(
+                                        todo,
+                                        onClick = {
+                                            val intent = Intent(
+                                                this@MainActivity,
+                                                EditTaskActivity::class.java
+                                            )
                                             intent.putExtra("todo", Json.encodeToString(todo))
                                             editTaskLauncher.launch(intent)
-                                        },
-                                        headlineContent = { Text(text = todo.title) },
-                                        trailingContent = {
-                                            Icon(
-                                                Icons.Filled.Delete,
-                                                contentDescription = "Delete Todo",
-                                                tint = Color.Red,
-                                                modifier = Modifier.clickable {
-                                                    handleDeleteTask(todo)
-                                                }
-                                            )
+                                        }, onDeleteRequest = {
+                                            handleDeleteTask(todo)
+                                        }, onCheckBoxClick = { checked ->
+
                                         }
                                     )
                                     Divider()
                                 }
                             }
-                        }
-                        else {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(text = "No Todos")
                             }
                         }
