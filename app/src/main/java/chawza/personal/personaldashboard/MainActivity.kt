@@ -62,7 +62,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.internal.concurrent.Task
 
 
 @Composable
@@ -187,30 +186,12 @@ class MainActivity : ComponentActivity() {
         }
 
         val todoService = TodosService(userToken)
+        val viewModel = TodoListVIewModel(todoService)
 
         setContent {
-            val viewModel = remember { TodoListVIewModel() }
             val snackBar = remember { SnackbarHostState() }
-            val isSyncing = remember { mutableStateOf(false) }
             val isLoading = remember { mutableStateOf(false) }
             val todos = viewModel.todos.collectAsState()
-
-            fun syncTodos() {
-                viewModel.viewModelScope.launch {
-                    isSyncing.value = true
-                    val fetchedResult = todoService.fetch()
-                    fetchedResult
-                        .onSuccess { todos ->
-                            viewModel.setTodos(todos)
-                        }
-                        .onFailure { error ->
-                            launch {
-                                snackBar.showSnackbar(error.message ?: "Something went wrong")
-                            }
-                        }
-                    isSyncing.value = false
-                }
-            }
 
             fun handleDeleteTask(todo: Todo) {
                 viewModel.viewModelScope.launch {
@@ -232,13 +213,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            syncTodos()
+                            viewModel.syncTodos()
                         }
                 }
             }
 
             LaunchedEffect(Unit) {
-                syncTodos()
+                viewModel.syncTodos()
             }
 
             val editTaskLauncher = rememberLauncherForActivityResult(
@@ -252,7 +233,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                syncTodos()
+                viewModel.syncTodos()
             }
 
             PersonalDashboardTheme {
@@ -278,7 +259,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             requestRefresh = {
-                                syncTodos()
+                                viewModel.syncTodos()
                             }
                         )
                     },
