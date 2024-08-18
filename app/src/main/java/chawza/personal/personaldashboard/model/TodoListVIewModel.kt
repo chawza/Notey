@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 
 class TodoListVIewModel(private val todoService: TodosService) : ViewModel() {
@@ -60,6 +64,33 @@ class TodoListVIewModel(private val todoService: TodosService) : ViewModel() {
                         )
                     }
 
+                    syncTodos()
+                }
+        }
+    }
+
+    fun handleCheckedTodo(todo: Todo, checked: Boolean) {
+        var doneDate: LocalDateTime? = null
+
+        if (todo.done == null && checked) {
+            doneDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+        }
+        else if (todo.done != null && !checked) {
+            doneDate = null
+        }
+        else {
+            return
+        }
+        val updated = todo.copy(done = doneDate)
+
+        viewModelScope.launch {
+            todoService.update(updated)
+                .onFailure { error ->
+                    snackBar.showSnackbar(
+                        error.message ?: "Something wrong happened"
+                    )
+                }
+                .onSuccess {
                     syncTodos()
                 }
         }

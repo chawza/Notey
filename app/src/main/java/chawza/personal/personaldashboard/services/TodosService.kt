@@ -1,6 +1,8 @@
 package chawza.personal.personaldashboard.services
 
+import android.util.Log
 import chawza.personal.personaldashboard.core.API
+import chawza.personal.personaldashboard.core.httpClient
 import chawza.personal.personaldashboard.repository.NewTodo
 import chawza.personal.personaldashboard.repository.Todo
 import kotlinx.coroutines.Dispatchers
@@ -8,7 +10,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
@@ -16,9 +17,8 @@ import java.io.IOException
 val ConnectionError = Error("Unable to connect to server")
 
 class TodosService(private val token: String) {
-    private val encoder = Json { ignoreUnknownKeys = true }
+    private val encoder = Json { ignoreUnknownKeys = true; encodeDefaults = true}
     private val jsonMediaType = "application/json".toMediaType()
-    private val client = OkHttpClient()
 
     suspend fun fetch(): Result<List<Todo>> = withContext(Dispatchers.IO) {
         val url = API.basicUrl()
@@ -32,7 +32,7 @@ class TodosService(private val token: String) {
             .build()
 
         val response = try {
-            client.newCall(request).execute()
+            httpClient.newCall(request).execute()
         } catch(error: IOException) {
             return@withContext Result.failure(ConnectionError)
         }
@@ -57,12 +57,13 @@ class TodosService(private val token: String) {
             .build()
 
         val response = try {
-            client.newCall(request).execute()
+            httpClient.newCall(request).execute()
         } catch(error: IOException) {
             return@withContext Result.failure(ConnectionError)
         }
 
         if (!response.isSuccessful) {
+            Log.e("ClientError", response.body!!.string())
             return@withContext Result.failure(Exception("Task not created"))
         }
 
@@ -84,7 +85,7 @@ class TodosService(private val token: String) {
             .build()
 
         val response = try {
-            client.newCall(request).execute()
+            httpClient.newCall(request).execute()
         } catch(error: IOException) {
             return@withContext Result.failure(ConnectionError)
         }
@@ -111,7 +112,7 @@ class TodosService(private val token: String) {
             .build()
 
         val response = try {
-            client.newCall(request).execute()
+            httpClient.newCall(request).execute()
         } catch(error: IOException) {
             return@withContext Result.failure(ConnectionError)
         }

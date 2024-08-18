@@ -61,6 +61,10 @@ import chawza.personal.personaldashboard.services.TodosService
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -147,19 +151,17 @@ fun TaskListItem(
 ) {
     ListItem(
         modifier = Modifier.clickable { onClick() },
-        leadingContent = {
+        headlineContent = { Text(text = todo.title) },
+        trailingContent = {
+//            Icon(
+//                Icons.Filled.Delete,
+//                contentDescription = "Delete Todo",
+//                tint = Color.Red,
+//                modifier = Modifier.clickable { onDeleteRequest() }
+//            )
             Checkbox(
                 checked = todo.done != null,
                 onCheckedChange = onCheckBoxClick
-            )
-        },
-        headlineContent = { Text(text = todo.title) },
-        trailingContent = {
-            Icon(
-                Icons.Filled.Delete,
-                contentDescription = "Delete Todo",
-                tint = Color.Red,
-                modifier = Modifier.clickable { onDeleteRequest() }
             )
         }
     )
@@ -169,7 +171,7 @@ fun TaskListItem(
 @Preview
 fun PreviewTaskListItem() {
     TaskListItem(
-        todo = Todo(1, "ASDASD", "asdasd"),
+        todo = Todo(1, "ASDASD", "asdasd", created = Clock.System.now().toLocalDateTime(TimeZone.UTC)),
         onClick = { /*TODO*/ },
         onCheckBoxClick = {}) {}
 }
@@ -251,7 +253,12 @@ class MainActivity : ComponentActivity() {
                     ) {
                         if (todos.value.isNotEmpty()) {
                             LazyColumn {
-                                items(todos.value.size) { idx ->
+                                items(
+                                    todos.value.size, key = { idx ->
+                                        val todo = todos.value[idx]
+                                        "${todo.id}-${todo.created.toString()}"  // TODO: based on last updated
+                                    }
+                                ) { idx ->
                                     val todo = todos.value[idx]
                                     TaskListItem(
                                         todo,
@@ -265,7 +272,7 @@ class MainActivity : ComponentActivity() {
                                         }, onDeleteRequest = {
                                             viewModel.handleDeleteTask(todo)
                                         }, onCheckBoxClick = { checked ->
-
+                                            viewModel.handleCheckedTodo(todo, checked)
                                         }
                                     )
                                     Divider()

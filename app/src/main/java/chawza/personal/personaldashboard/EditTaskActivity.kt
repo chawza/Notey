@@ -119,8 +119,12 @@ class TodoFormViewModel(private val todoService: TodosService) : ViewModel() {
                     isLoading.value = false
                 }
                 .onSuccess {
+                    setTitle(it.title)
+                    setNote(it.notes ?: "")
                     isLoading.value = false
-                    snackBar.showSnackbar("Task updated!")
+                    launch {
+                        snackBar.showSnackbar("Task updated!")
+                    }
                 }
         }
     }
@@ -191,7 +195,8 @@ class EditTaskActivity : ComponentActivity() {
                                 if (isUpdate) {
                                     Checkbox(
                                         checked = updateTodo!!.done != null,
-                                        onCheckedChange = {})
+                                        onCheckedChange = {}
+                                    )
                                 }
                             }
                             OutlinedTextField(
