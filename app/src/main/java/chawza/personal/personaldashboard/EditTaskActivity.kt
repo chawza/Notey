@@ -31,9 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,10 +46,15 @@ import chawza.personal.personaldashboard.ui.theme.PersonalDashboardTheme
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
-class TodoFormViewModel : ViewModel() {
+class TodoFormViewModel(private val todoService: TodosService) : ViewModel() {
+    var isLoading = MutableStateFlow(false)
+    val snackBar = SnackbarHostState()
+
     private val _title = MutableStateFlow("")
     val title = _title.asStateFlow()
 
@@ -66,6 +68,63 @@ class TodoFormViewModel : ViewModel() {
     fun setNote(value: String) {
         _note.value = value
     }
+
+    suspend fun handleCreate(): Result<Todo> {
+        return viewModelScope.async {
+            isLoading.value = true
+
+            todoService.create(NewTodo(title.value, note.value))
+                .onFailure { error ->
+                    launch {
+                        snackBar.showSnackbar(
+                            error.message ?: "Failed to create new task",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                    isLoading.value = false
+                    return@async Result.failure(Exception("ASDAS"))
+                }
+                .onSuccess { newTodo ->
+                    isLoading.value = false
+                    return@async Result.success(newTodo)
+                }
+        }.await()
+    }
+
+    fun handleUpdate(updateTodo: Todo) {
+        viewModelScope.launch {
+            isLoading.value = true
+
+            val currTitle = title.value
+            val currNote = note.value
+
+            if (currTitle.isEmpty()) {
+                async {
+                    snackBar.showSnackbar("Title must be filled")
+                }.await()
+
+                return@launch
+            }
+
+            val updated = updateTodo.copy(title = currTitle, notes = currNote)
+
+            todoService.update(updated)
+                .onFailure { error ->
+                    launch {
+                        snackBar.showSnackbar(
+                            error.message ?: "Failed to update task",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                    isLoading.value = false
+                }
+                .onSuccess {
+                    isLoading.value = false
+                    snackBar.showSnackbar("Task updated!")
+                }
+        }
+    }
+
 }
 
 class EditTaskActivity : ComponentActivity() {
@@ -80,15 +139,16 @@ class EditTaskActivity : ComponentActivity() {
             updateTodo = Json.decodeFromString<Todo>(this.intent.getStringExtra("todo")!!)
         }
 
+        userToken = runBlocking { this@EditTaskActivity.userStore.data.first()[USER_TOKEN_KEY]!! }
+
         val isUpdate = updateTodo != null
+        val service = TodosService(this.userToken)
+        val viewModel = TodoFormViewModel(service)
 
         setContent {
-            val model = remember { TodoFormViewModel() }
-            var isLoading by remember { mutableStateOf(false) }
-            val snackBar = remember { SnackbarHostState() }
-
-            val title by model.title.collectAsState()
-            val note by model.note.collectAsState()
+            val isLoading = viewModel.isLoading.collectAsState()
+            val title by viewModel.title.collectAsState()
+            val note by viewModel.note.collectAsState()
 
             LaunchedEffect(Unit) {
                 launch {
@@ -98,73 +158,14 @@ class EditTaskActivity : ComponentActivity() {
                 }
 
                 if (isUpdate) {
-                    model.setTitle(updateTodo!!.title)
-                    model.setNote(updateTodo!!.notes ?: "")
-                }
-            }
-
-            fun handleCreate() {
-                model.viewModelScope.launch {
-                    isLoading = true
-
-                    val service = TodosService(userToken)
-                    service.create(NewTodo(title, note))
-                        .onFailure { error ->
-                            launch {
-                                snackBar.showSnackbar(
-                                    error.message ?: "Failed to create new task",
-                                    duration = SnackbarDuration.Short
-                                )
-                            }
-                            isLoading = false
-                        }
-                        .onSuccess {
-                            isLoading = false
-                            this@EditTaskActivity.intent.putExtra("message", "Task created!")
-                            this@EditTaskActivity.setResult(RESULT_OK)
-                            this@EditTaskActivity.finish()
-                        }
-                }
-            }
-
-            fun handleUpdate() {
-                model.viewModelScope.launch {
-                    isLoading = true
-
-                    val currTitle = model.title.value
-                    val currNote = model.note.value
-
-                    if (currTitle.isEmpty()) {
-                        async {
-                            snackBar.showSnackbar("Title must be filled")
-                        }.await()
-
-                        return@launch
-                    }
-
-                    val service = TodosService(userToken)
-                    val updated = updateTodo!!.copy(title = currTitle, notes = currNote)
-
-                    service.update(updated)
-                        .onFailure { error ->
-                            launch {
-                                snackBar.showSnackbar(
-                                    error.message ?: "Failed to update task",
-                                    duration = SnackbarDuration.Short
-                                )
-                            }
-                            isLoading = false
-                        }
-                        .onSuccess {
-                            isLoading = false
-                            snackBar.showSnackbar("Task updated!")
-                        }
+                    viewModel.setTitle(updateTodo!!.title)
+                    viewModel.setNote(updateTodo!!.notes ?: "")
                 }
             }
 
             PersonalDashboardTheme {
                 Scaffold(
-                    snackbarHost = { SnackbarHost(hostState = snackBar) }
+                    snackbarHost = { SnackbarHost(hostState = viewModel.snackBar) }
                 ) { paddingValues ->
                     Surface(
                         modifier = Modifier.padding(paddingValues),
@@ -184,7 +185,7 @@ class EditTaskActivity : ComponentActivity() {
                                     text = if (isUpdate) "Update Task" else "New Task",
                                     style = MaterialTheme.typography.titleMedium
                                 )
-                                if (isLoading) {
+                                if (isLoading.value) {
                                     CircularProgressIndicator()
                                 }
                                 if (isUpdate) {
@@ -195,7 +196,7 @@ class EditTaskActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxWidth(),
                                 value = title,
                                 singleLine = true,
-                                onValueChange = { model.setTitle(it) },
+                                onValueChange = { viewModel.setTitle(it) },
                                 label = { Text(text = "Title") }
                             )
                             OutlinedTextField(
@@ -203,7 +204,7 @@ class EditTaskActivity : ComponentActivity() {
                                     .height(56.dp * 4)
                                     .fillMaxWidth(),
                                 value = note,
-                                onValueChange = { model.setNote(it) },
+                                onValueChange = { viewModel.setNote(it) },
                                 label = { Text(text = "Note") }
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -211,8 +212,19 @@ class EditTaskActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(56.dp),
-                                    onClick = { if (isUpdate) handleUpdate() else handleCreate() },
-                                    enabled = !isLoading,
+                                    onClick = {
+                                        if (isUpdate)
+                                            viewModel.handleUpdate(updateTodo!!)
+                                        else {
+                                            viewModel.viewModelScope.launch {
+                                                viewModel.handleCreate()
+                                                    .onSuccess {
+                                                        this@EditTaskActivity.finish()
+                                                    }
+                                            }
+                                        }
+                                    },
+                                    enabled = !isLoading.value,
                                     shape = MaterialTheme.shapes.small
                                 ) {
                                     Text(text = if (isUpdate) "Update" else "Create")
@@ -220,11 +232,11 @@ class EditTaskActivity : ComponentActivity() {
                                 if (isUpdate) {
                                     Button(
                                         onClick = {
-                                            model.viewModelScope.launch {
+                                            viewModel.viewModelScope.launch {
                                                 TodosService(userToken).delete(updateTodo!!.id)
                                                     .onFailure {
                                                         launch {
-                                                            snackBar.showSnackbar("Failed to Delete task")
+                                                            viewModel.snackBar.showSnackbar("Failed to Delete task")
                                                         }
                                                     }
                                                     .onSuccess {
